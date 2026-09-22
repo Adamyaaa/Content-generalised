@@ -3,7 +3,6 @@ import {
   X,
   Copy,
   Check,
-  Video,
   Share2,
   MessageSquare,
   Zap,
@@ -18,7 +17,7 @@ import { api } from '../services/api';
 export default function ConceptDetailModal({ conceptId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('source_intel'); // 'source_intel', 'scenes', 'linkedin', 'instagram', 'whatsapp', 'psychology', 'qa'
+  const [activeTab, setActiveTab] = useState('source_intel'); // 'source_intel', 'scenes', 'linkedin', 'whatsapp', 'psychology', 'qa'
   const [copiedKey, setCopiedKey] = useState(null);
 
   useEffect(() => {
@@ -84,7 +83,6 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
             { id: 'source_intel', label: 'Source Reel & Extracted Intel', icon: Film },
             { id: 'scenes', label: 'Video Script & Scenes', icon: Sparkles },
             { id: 'linkedin', label: 'LinkedIn Post', icon: Share2 },
-            { id: 'instagram', label: 'Instagram Reel', icon: Video },
             { id: 'whatsapp', label: 'WhatsApp Broadcast', icon: MessageSquare },
             { id: 'psychology', label: 'Viral Psychology Breakdown', icon: Zap },
             { id: 'qa', label: 'Brand QA Audit', icon: ShieldCheck },
@@ -364,41 +362,7 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                 </div>
               )}
 
-              {/* TAB 3: INSTAGRAM REEL SCRIPT */}
-              {activeTab === 'instagram' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <div>
-                      <h3 className="font-bold text-sm text-white">Instagram Reel Script & Visual Directions</h3>
-                      <p className="text-xs text-slate-400">Spoken audio word-for-word with visual direction, no emojis</p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(concept.platform_ideations.instagram_reel_script, 'instagram')
-                      }
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
-                    >
-                      {copiedKey === 'instagram' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Copied Script!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>One-Click Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
 
-                  <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-slate-200 leading-relaxed">
-                      {concept.platform_ideations.instagram_reel_script}
-                    </pre>
-                  </div>
-                </div>
-              )}
 
               {/* TAB 4: WHATSAPP BROADCAST */}
               {activeTab === 'whatsapp' && (
