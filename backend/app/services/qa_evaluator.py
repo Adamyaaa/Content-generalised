@@ -55,7 +55,7 @@ class BrandQAEvaluator:
             model = genai.GenerativeModel(
                 model_name=settings.GEMINI_MODEL,
                 generation_config={
-                    "temperature": 0.1,
+                    "temperature": 0.3,
                     "response_mime_type": "application/json"
                 }
             )
@@ -79,19 +79,21 @@ Title: {concept.title}
 [WhatsApp Broadcast]:
 {concept.platform_ideations.whatsapp_broadcast}
 
-=== EVALUATION CRITERIA (Score each 1-10) ===
-1. Hook strength: Does the opening immediately disrupt the scroll and create an irresistible curiosity gap or contrarian stance?
-2. Brand voice alignment: Does it precisely match {profile.brand_voice_guidelines.tone}? Is it tailored to {profile.company_name}'s ICP?
-3. Specificity & actionable value: Are there concrete metrics, operational numbers, and practical insights rather than generic advice?
-4. Anti-AI test: Does it sound like an experienced human practitioner? Are there ANY emojis (instant penalty), buzzwords ('game-changer', 'revolutionize'), or motivational cliches?
+=== EVALUATION CRITERIA (Rate each category with rigorous critical judgment) ===
+1. Hook strength (1-10): Does the opening sentence disrupt the feed and create intense psychological intrigue or contrarian dissonance?
+2. Brand voice alignment (1-10): Does it specifically address {profile.company_name}'s ICP problems and sound like an authoritative practitioner in {profile.industry}?
+3. Specificity & actionable value (1-10): Are there real numbers, concrete engineering/business metrics, and architectural steps rather than generic platitudes?
+4. Anti-AI score (1-10): Deduct heavily for any emojis, fluff, or generic AI buzzwords. Award 10 only if it reads 100% like a seasoned human operator.
+5. Overall score (1-100): Composite grade reflecting total conversion readiness and publication quality. Grade honestly without artificial clustering (must be 80+ to pass).
 
-Respond strictly with valid JSON:
+Respond strictly with valid JSON schema:
 {{
-  "hook_strength": 9,
-  "brand_voice_alignment": 9,
-  "specificity_and_value": 9,
-  "anti_ai_score": 10,
-  "feedback": "Concise summary of strengths and specific revisions if needed"
+  "hook_strength": <integer between 1 and 10>,
+  "brand_voice_alignment": <integer between 1 and 10>,
+  "specificity_and_value": <integer between 1 and 10>,
+  "anti_ai_score": <integer between 1 and 10>,
+  "total_score": <integer between 1 and 100>,
+  "feedback": "<2-3 sentences explaining exact deductions and how to improve>"
 }}
 """
             res = model.generate_content(prompt)
@@ -109,15 +111,24 @@ Respond strictly with valid JSON:
                 cleaned = cleaned[:-3]
 
             parsed = json.loads(cleaned.strip())
-            hook = int(parsed.get("hook_strength", 8))
-            voice = int(parsed.get("brand_voice_alignment", 8))
-            val = int(parsed.get("specificity_and_value", 8))
-            anti_ai = int(parsed.get("anti_ai_score", 8))
+            hook = max(1, min(10, int(parsed.get("hook_strength", 8))))
+            voice = max(1, min(10, int(parsed.get("brand_voice_alignment", 8))))
+            val = max(1, min(10, int(parsed.get("specificity_and_value", 8))))
+            anti_ai = max(1, min(10, int(parsed.get("anti_ai_score", 9))))
 
             if has_emojis:
                 anti_ai = min(anti_ai, 4)
 
-            total = int((hook + voice + val + anti_ai) * 2.5)
+            # Use LLM composite total_score if provided, otherwise compute weighted sum
+            raw_total = parsed.get("total_score")
+            if raw_total is not None and isinstance(raw_total, (int, float)) and 50 <= raw_total <= 100:
+                total = int(raw_total)
+            else:
+                total = int((hook * 0.25 + voice * 0.25 + val * 0.25 + anti_ai * 0.25) * 10)
+
+            if has_emojis:
+                total = min(total, 65)
+
             feedback = parsed.get("feedback", "Evaluation completed.")
             if has_emojis:
                 feedback = f"Emoji presence detected. {feedback}"
