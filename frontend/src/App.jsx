@@ -210,7 +210,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 py-6 mt-16 text-center text-xs text-slate-600">
-        <p>Autonomous Viral Content Reverse-Engineering & Brand Adaptation Engine • Built with Gemini Flash & Groq Whisper</p>
+        <p>ContentEngine • Autonomous Brand Adaptation Engine • Powered by Gemini Flash & Groq Whisper</p>
       </footer>
 
       {/* Modals */}

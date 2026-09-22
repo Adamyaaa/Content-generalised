@@ -13,13 +13,8 @@ export default function Navbar({ activeProfile, onOpenProfileModal, onOpenApiKey
             <Sparkles className="w-5 h-5 text-slate-950" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-lg text-white tracking-tight">ViralEngine</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono font-medium border border-emerald-500/20">
-                v1.0 • Anti-AI
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">Content Reverse-Engineering & Brand Adaptation</p>
+            <span className="font-bold text-lg text-white tracking-tight block leading-tight">ContentEngine</span>
+            <p className="text-xs text-slate-400 mt-0.5">Content Reverse-Engineering & Brand Adaptation</p>
           </div>
         </div>
 
