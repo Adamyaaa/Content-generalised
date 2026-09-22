@@ -91,16 +91,16 @@ export default function IngestionBar({ activeProfile, onConceptGenerated }) {
       <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header & Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-lg font-bold text-white flex items-center space-x-2">
+          <h2 className="text-base font-bold text-white tracking-tight flex items-center space-x-2">
             <span>Reverse-Engineer Viral Content</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-              Adapt for: {activeProfile?.company_name}
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20">
+              {activeProfile?.company_name}
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Ingest social posts or raw video, extract the psychological hook formula, and adapt for {activeProfile?.company_name}.
+            Extract underlying hook psychology and adapt into high-authority multi-platform drafts.
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export default function IngestionBar({ activeProfile, onConceptGenerated }) {
           <button
             type="button"
             onClick={() => setActiveTab('url')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
               activeTab === 'url'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
@@ -121,22 +121,22 @@ export default function IngestionBar({ activeProfile, onConceptGenerated }) {
           <button
             type="button"
             onClick={() => setActiveTab('upload')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
               activeTab === 'upload'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Direct Upload</span>
+            <span>Upload</span>
           </button>
         </div>
       </div>
 
       {/* Input Section */}
       {activeTab === 'url' ? (
-        <form onSubmit={handleSubmitUrl} className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <form onSubmit={handleSubmitUrl} className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="relative flex-1">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                 <Link2 className="w-4 h-4" />
@@ -148,13 +148,13 @@ export default function IngestionBar({ activeProfile, onConceptGenerated }) {
                 placeholder="Paste YouTube Shorts, Instagram Reel, LinkedIn post, or TikTok link..."
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition disabled:opacity-50"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
               disabled={isProcessing || !urlInput.trim()}
-              className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-900/30 transition disabled:opacity-50"
+              className="flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold shadow-md transition disabled:opacity-50"
             >
               {isProcessing ? (
                 <>
@@ -171,11 +171,14 @@ export default function IngestionBar({ activeProfile, onConceptGenerated }) {
           </div>
 
           <div className="flex items-center space-x-2 text-[11px] text-slate-500 pl-1">
-            <span>Supported:</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300">LinkedIn (Photo + Text bypass)</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300">YouTube Shorts</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300">Instagram Reels</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300">TikTok</span>
+            <span>Supports:</span>
+            <span className="text-slate-400 font-medium">LinkedIn</span>
+            <span>•</span>
+            <span className="text-slate-400 font-medium">YouTube Shorts</span>
+            <span>•</span>
+            <span className="text-slate-400 font-medium">Instagram Reels</span>
+            <span>•</span>
+            <span className="text-slate-400 font-medium">TikTok</span>
           </div>
         </form>
       ) : (

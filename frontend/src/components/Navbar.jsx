@@ -23,44 +23,33 @@ export default function Navbar({ activeProfile, onOpenProfileModal, onOpenApiKey
           </div>
         </div>
 
-        {/* Right side: API Keys, Active Brand & Manage */}
+        {/* Right side: API Keys & Active Brand */}
         <div className="flex items-center space-x-3">
-          {/* API Keys Configuration Button (styled like user's screenshot header) */}
+          {/* API Keys Settings */}
           <button
             onClick={onOpenApiKeysModal}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
               isAiConfigured
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 animate-pulse'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
             }`}
           >
             <Key className="w-3.5 h-3.5" />
             <span>{isAiConfigured ? 'API Keys Connected' : 'API Keys Settings'}</span>
           </button>
 
-          {healthInfo && (
-            <div className="hidden lg:flex items-center space-x-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-400">
-              <span className={`w-2 h-2 rounded-full ${healthInfo.ffmpeg_status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              <span>FFmpeg: {healthInfo.ffmpeg_status}</span>
-              <span className="text-slate-600">|</span>
-              <span>Model: {healthInfo.gemini_model}</span>
-            </div>
-          )}
-
           {activeProfile && (
-            <div className="flex items-center space-x-3 bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-1.5 shadow-sm">
-              <div className="text-right">
-                <div className="text-xs text-slate-400 font-medium">Active Brand</div>
-                <div className="text-sm font-semibold text-slate-100">{activeProfile.company_name}</div>
+            <button
+              onClick={onOpenProfileModal}
+              className="flex items-center space-x-2 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-sm transition"
+              title="Click to switch or edit brand profile"
+            >
+              <div className="text-left">
+                <div className="text-[10px] text-slate-400 font-medium leading-none">Active Brand</div>
+                <div className="text-xs font-semibold text-slate-100 mt-0.5">{activeProfile.company_name}</div>
               </div>
-              <button
-                onClick={onOpenProfileModal}
-                className="p-1.5 rounded-lg bg-slate-700/70 hover:bg-slate-750 text-slate-300 hover:text-white transition"
-                title="Manage Brand Profiles"
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-            </div>
+              <Sliders className="w-3.5 h-3.5 text-slate-400" />
+            </button>
           )}
         </div>
       </div>
