@@ -68,12 +68,29 @@ class PipelineOrchestrator:
             db.update_queue_status(queue_id, QueueStatus.ANALYZING, "Transcribing and reverse-engineering viral psychology...")
             transcript = await transcription_service.transcribe(audio_path, transcript_override_path)
 
+            # Generate static web URLs for video and extracted frames
+            try:
+                rel_video = os.path.relpath(video_path, str(Path(settings.STORAGE_DIR))).replace("\\", "/")
+                video_web_url = f"/static/{rel_video}"
+            except Exception:
+                video_web_url = None
+
+            frame_web_urls = []
+            for fp in frame_paths:
+                try:
+                    rel_f = os.path.relpath(fp, str(Path(settings.STORAGE_DIR))).replace("\\", "/")
+                    frame_web_urls.append(f"/static/{rel_f}")
+                except Exception:
+                    pass
+
             analysis = await reverse_engineer.analyze(
                 queue_id=queue_id,
                 source_url_or_file=queue_item.source_url or os.path.basename(video_path),
                 transcript=transcript,
                 frame_paths=frame_paths,
-                duration_seconds=duration_seconds
+                duration_seconds=duration_seconds,
+                video_url=video_web_url,
+                frame_urls=frame_web_urls
             )
             db.create_analysis(analysis)
 

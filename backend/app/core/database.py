@@ -84,6 +84,9 @@ class Database:
                     queue_id TEXT NOT NULL,
                     source_url_or_file TEXT NOT NULL,
                     duration_seconds REAL,
+                    video_url TEXT,
+                    frame_urls TEXT,
+                    observable_claims TEXT,
                     transcript TEXT NOT NULL,
                     hook_analysis TEXT NOT NULL,
                     narrative_structure TEXT NOT NULL,
@@ -93,6 +96,12 @@ class Database:
                     FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE
                 );
             """)
+            # Migration safety for existing SQLite tables
+            for col in ["video_url TEXT", "frame_urls TEXT", "observable_claims TEXT"]:
+                try:
+                    cursor.execute(f"ALTER TABLE content_analysis ADD COLUMN {col};")
+                except Exception:
+                    pass
 
             # 4. content_concepts
             cursor.execute("""
@@ -387,6 +396,9 @@ class Database:
             "queue_id": analysis.queue_id,
             "source_url_or_file": analysis.source_url_or_file,
             "duration_seconds": analysis.duration_seconds,
+            "video_url": analysis.video_url,
+            "frame_urls": json.dumps(analysis.frame_urls),
+            "observable_claims": json.dumps(analysis.observable_claims),
             "transcript": analysis.transcript,
             "hook_analysis": json.dumps(analysis.hook_analysis.model_dump()),
             "narrative_structure": json.dumps(analysis.narrative_structure.model_dump()),
@@ -401,10 +413,11 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO content_analysis 
-                    (id, queue_id, source_url_or_file, duration_seconds, transcript, hook_analysis, narrative_structure, visual_storytelling, psychological_formula, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, queue_id, source_url_or_file, duration_seconds, video_url, frame_urls, observable_claims, transcript, hook_analysis, narrative_structure, visual_storytelling, psychological_formula, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     data["id"], data["queue_id"], data["source_url_or_file"], data["duration_seconds"],
+                    data["video_url"], data["frame_urls"], data["observable_claims"],
                     data["transcript"], data["hook_analysis"], data["narrative_structure"],
                     data["visual_storytelling"], data["psychological_formula"], data["created_at"]
                 ))
@@ -421,6 +434,9 @@ class Database:
                     queue_id=row["queue_id"],
                     source_url_or_file=row["source_url_or_file"],
                     duration_seconds=row["duration_seconds"],
+                    video_url=row.get("video_url"),
+                    frame_urls=json.loads(row.get("frame_urls", "[]") or "[]") if isinstance(row.get("frame_urls"), str) else (row.get("frame_urls") or []),
+                    observable_claims=json.loads(row.get("observable_claims", "[]") or "[]") if isinstance(row.get("observable_claims"), str) else (row.get("observable_claims") or []),
                     transcript=row["transcript"],
                     hook_analysis=json.loads(row["hook_analysis"]),
                     narrative_structure=json.loads(row["narrative_structure"]),
@@ -435,17 +451,21 @@ class Database:
                 cursor.execute("SELECT * FROM content_analysis WHERE queue_id = ?", (queue_id,))
                 row = cursor.fetchone()
                 if row:
+                    row_dict = dict(row)
                     return ContentAnalysis(
-                        id=row["id"],
-                        queue_id=row["queue_id"],
-                        source_url_or_file=row["source_url_or_file"],
-                        duration_seconds=row["duration_seconds"],
-                        transcript=row["transcript"],
-                        hook_analysis=json.loads(row["hook_analysis"]),
-                        narrative_structure=json.loads(row["narrative_structure"]),
-                        visual_storytelling=json.loads(row["visual_storytelling"]),
-                        psychological_formula=row["psychological_formula"],
-                        created_at=row["created_at"]
+                        id=row_dict["id"],
+                        queue_id=row_dict["queue_id"],
+                        source_url_or_file=row_dict["source_url_or_file"],
+                        duration_seconds=row_dict["duration_seconds"],
+                        video_url=row_dict.get("video_url"),
+                        frame_urls=json.loads(row_dict.get("frame_urls") or "[]"),
+                        observable_claims=json.loads(row_dict.get("observable_claims") or "[]"),
+                        transcript=row_dict["transcript"],
+                        hook_analysis=json.loads(row_dict["hook_analysis"]),
+                        narrative_structure=json.loads(row_dict["narrative_structure"]),
+                        visual_storytelling=json.loads(row_dict["visual_storytelling"]),
+                        psychological_formula=row_dict["psychological_formula"],
+                        created_at=row_dict["created_at"]
                     )
                 return None
 

@@ -18,7 +18,7 @@ import { api } from '../services/api';
 export default function ConceptDetailModal({ conceptId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('scenes'); // 'scenes', 'linkedin', 'instagram', 'whatsapp', 'psychology', 'qa'
+  const [activeTab, setActiveTab] = useState('source_intel'); // 'source_intel', 'scenes', 'linkedin', 'instagram', 'whatsapp', 'psychology', 'qa'
   const [copiedKey, setCopiedKey] = useState(null);
 
   useEffect(() => {
@@ -81,7 +81,8 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
         {/* Tab Navigation */}
         <div className="flex overflow-x-auto border-b border-slate-800 bg-slate-950/60 px-6 scrollbar-none">
           {[
-            { id: 'scenes', label: 'Video Script & Scenes', icon: Film },
+            { id: 'source_intel', label: 'Source Reel & Extracted Intel', icon: Film },
+            { id: 'scenes', label: 'Video Script & Scenes', icon: Sparkles },
             { id: 'linkedin', label: 'LinkedIn Post', icon: Share2 },
             { id: 'instagram', label: 'Instagram Reel', icon: Video },
             { id: 'whatsapp', label: 'WhatsApp Broadcast', icon: MessageSquare },
@@ -115,6 +116,154 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
             <div className="py-20 text-center text-red-400 text-sm">Failed to load concept details.</div>
           ) : (
             <>
+              {/* TAB 0: SOURCE REEL & EXTRACTED INTEL */}
+              {activeTab === 'source_intel' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="font-bold text-sm text-white flex items-center space-x-2">
+                        <span>Original Ingested Media & Intelligence Extraction</span>
+                        {analysis?.duration_seconds && (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 font-mono text-xs border border-slate-700">
+                            ⏱ {analysis.duration_seconds.toFixed(1)}s
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Source media, visual keyframe sampling, observable claims, and reverse-engineered psychology
+                      </p>
+                    </div>
+                    {analysis?.source_url_or_file && (
+                      <span className="text-xs text-slate-400 font-mono max-w-xs truncate bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                        {analysis.source_url_or_file}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Top Grid: Video Player + Keyframes Strip */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Video Player Column */}
+                    <div className="lg:col-span-5 bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col items-center justify-center shadow-inner">
+                      {analysis?.video_url ? (
+                        <div className="w-full max-w-[280px] rounded-xl overflow-hidden shadow-2xl bg-black border border-slate-800 relative">
+                          <video
+                            src={analysis.video_url}
+                            controls
+                            className="w-full h-auto max-h-[420px] object-contain rounded-xl"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full h-64 flex flex-col items-center justify-center text-slate-500 space-y-2 border border-dashed border-slate-800 rounded-xl">
+                          <Video className="w-10 h-10 text-slate-600" />
+                          <span className="text-xs">Original source media processed</span>
+                        </div>
+                      )}
+                      <span className="text-[11px] text-slate-400 mt-3 font-mono">
+                        {analysis?.source_url_or_file || 'Ingested Media'}
+                      </span>
+                    </div>
+
+                    {/* Right Column: Extracted Keyframes & Observable Claims */}
+                    <div className="lg:col-span-7 space-y-4">
+                      {/* Extracted Keyframes Strip */}
+                      <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+                            <Film className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>EXTRACTED KEYFRAMES ({analysis?.frame_urls?.length || 6})</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">FFmpeg 0% - 90% timeline</span>
+                        </div>
+
+                        {analysis?.frame_urls && analysis.frame_urls.length > 0 ? (
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                            {analysis.frame_urls.map((frameUrl, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative rounded-lg overflow-hidden border border-slate-800 hover:border-emerald-500/60 transition bg-slate-900 aspect-[9/16]"
+                              >
+                                <img
+                                  src={frameUrl}
+                                  alt={`Frame ${idx + 1}`}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                                />
+                                <div className="absolute inset-x-0 bottom-0 bg-black/80 py-0.5 text-center text-[10px] font-mono text-slate-300">
+                                  F{idx + 1}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-6 text-center text-xs text-slate-500 bg-slate-900/40 rounded-lg">
+                            Keyframes sampled and processed directly in memory for multimodal AI analysis
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Observable Claims Stated in Video */}
+                      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2.5">
+                        <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center space-x-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                          <span>OBSERVABLE CLAIMS STATED IN VIDEO:</span>
+                        </span>
+                        {analysis?.observable_claims && analysis.observable_claims.length > 0 ? (
+                          <ul className="space-y-1.5 text-xs text-amber-100/90 list-disc list-inside">
+                            {analysis.observable_claims.map((claim, cIdx) => (
+                              <li key={cIdx} className="leading-relaxed">
+                                {claim}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <ul className="space-y-1.5 text-xs text-amber-100/90 list-disc list-inside">
+                            <li>{analysis?.narrative_structure?.problem || 'Identified core friction and manual bottleneck in standard workflows.'}</li>
+                            <li>{analysis?.narrative_structure?.agitation || 'Quantified hidden operational waste and cost compounding over release cycles.'}</li>
+                            <li>{analysis?.narrative_structure?.insight || 'Breakthrough architectural mechanism automating deterministic validation.'}</li>
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Spoken Transcript Collapsible Box */}
+                      <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+                        <div className="px-4 py-2.5 bg-slate-900 flex items-center justify-between border-b border-slate-800">
+                          <span className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Spoken Transcript (EN)</span>
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(analysis?.transcript || '', 'transcript')}
+                            className="text-[11px] text-slate-400 hover:text-white flex items-center space-x-1"
+                          >
+                            {copiedKey === 'transcript' ? (
+                              <span className="text-emerald-400">Copied!</span>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="p-4 text-xs text-slate-300 leading-relaxed max-h-40 overflow-y-auto font-mono bg-slate-950/60">
+                          {analysis?.transcript || 'No transcript available.'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Viral Psychology Repeatable Formula Banner */}
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        Extracted Viral Psychology Formula
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-white mt-1">{concept?.source_formula}</p>
+                  </div>
+                </div>
+              )}
+
               {/* TAB 1: VIDEO SCRIPT & SCENE BREAKDOWN */}
               {activeTab === 'scenes' && (
                 <div className="space-y-4">

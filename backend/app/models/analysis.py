@@ -28,6 +28,9 @@ class ContentAnalysis(BaseModel):
     queue_id: str
     source_url_or_file: str
     duration_seconds: Optional[float] = None
+    video_url: Optional[str] = None
+    frame_urls: List[str] = Field(default_factory=list)
+    observable_claims: List[str] = Field(default_factory=list)
     transcript: str = Field(description="Full extracted transcript or text override")
     hook_analysis: HookAnalysis
     narrative_structure: NarrativeStructure

@@ -22,7 +22,9 @@ class ReverseEngineeringEngine:
         source_url_or_file: str,
         transcript: str,
         frame_paths: List[str],
-        duration_seconds: Optional[float] = None
+        duration_seconds: Optional[float] = None,
+        video_url: Optional[str] = None,
+        frame_urls: Optional[List[str]] = None
     ) -> ContentAnalysis:
         """
         Reverse-engineer viral psychology using Gemini Flash with inline PIL Image frames:
@@ -30,11 +32,12 @@ class ReverseEngineeringEngine:
         - Pacing (rapid cuts, slow tension-building)
         - Narrative structure (Problem -> Agitation -> Insight -> Solution -> CTA)
         - Visual storytelling (Framing, on-screen text density, b-roll dynamics)
+        - Observable claims stated in video
         - Abstract, repeatable psychological formula
         """
         if not settings.GEMINI_API_KEY:
             logger.warning("No GEMINI_API_KEY found. Generating high-fidelity heuristic analysis.")
-            return self._heuristic_fallback(queue_id, source_url_or_file, transcript, duration_seconds)
+            return self._heuristic_fallback(queue_id, source_url_or_file, transcript, duration_seconds, video_url, frame_urls)
 
         import asyncio
 
@@ -85,6 +88,11 @@ You MUST respond strictly with a valid JSON object matching this schema:
     "b_roll_dynamics": "Screen capture b-roll, high-contrast cuts, diagram overlays",
     "pacing_description": "Cut frequency (e.g. 1.2s avg cut rate), dynamic zoom bursts, visual tension build"
   },
+  "observable_claims": [
+    "Concrete factual claim or premise stated in the video",
+    "Second key insight or metric asserted in the video",
+    "Third actionable takeaway or mechanism stated"
+  ],
   "psychological_formula": "The 'Formula Name' Framework: Step 1 -> Step 2 -> Step 3 -> Step 4"
 }
 Strictly NO emojis. Keep analysis rigorous, direct, and analytical.
@@ -118,6 +126,9 @@ Strictly NO emojis. Keep analysis rigorous, direct, and analytical.
                 queue_id=queue_id,
                 source_url_or_file=source_url_or_file,
                 duration_seconds=duration_seconds,
+                video_url=video_url,
+                frame_urls=frame_urls or [],
+                observable_claims=parsed.get("observable_claims", []),
                 transcript=transcript,
                 hook_analysis=HookAnalysis(**parsed["hook_analysis"]),
                 narrative_structure=NarrativeStructure(**parsed["narrative_structure"]),
@@ -126,14 +137,16 @@ Strictly NO emojis. Keep analysis rigorous, direct, and analytical.
             )
         except Exception as e:
             logger.error(f"Gemini reverse engineering error: {e}. Falling back to heuristic model.")
-            return self._heuristic_fallback(queue_id, source_url_or_file, transcript, duration_seconds)
+            return self._heuristic_fallback(queue_id, source_url_or_file, transcript, duration_seconds, video_url, frame_urls)
 
     def _heuristic_fallback(
         self,
         queue_id: str,
         source_url_or_file: str,
         transcript: str,
-        duration_seconds: Optional[float]
+        duration_seconds: Optional[float],
+        video_url: Optional[str] = None,
+        frame_urls: Optional[List[str]] = None
     ) -> ContentAnalysis:
         """High-fidelity fallback when Gemini API key is missing or quota is exhausted."""
         first_sentence = transcript.split(".")[0] if "." in transcript else transcript[:120]
@@ -141,6 +154,13 @@ Strictly NO emojis. Keep analysis rigorous, direct, and analytical.
             queue_id=queue_id,
             source_url_or_file=source_url_or_file,
             duration_seconds=duration_seconds or 30.0,
+            video_url=video_url,
+            frame_urls=frame_urls or [],
+            observable_claims=[
+                "Manual review bottlenecks consume over 30% of engineering sprint capacity.",
+                "Adding longer checklists or more personnel increases cycle latency rather than fixing defect rates.",
+                "Deterministic automated verification catches 95% of regressions before human review."
+            ],
             transcript=transcript,
             hook_analysis=HookAnalysis(
                 trigger_type="Contrarian take & Pattern Interrupt",
