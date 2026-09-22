@@ -1,7 +1,9 @@
 import React from 'react';
-import { Sparkles, Sliders, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, Sliders, Key, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export default function Navbar({ activeProfile, onOpenProfileModal, healthInfo }) {
+export default function Navbar({ activeProfile, onOpenProfileModal, onOpenApiKeysModal, healthInfo }) {
+  const isAiConfigured = healthInfo?.gemini_configured && healthInfo?.groq_configured;
+
   return (
     <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -21,10 +23,23 @@ export default function Navbar({ activeProfile, onOpenProfileModal, healthInfo }
           </div>
         </div>
 
-        {/* Right side: Active Brand & Manage */}
-        <div className="flex items-center space-x-4">
+        {/* Right side: API Keys, Active Brand & Manage */}
+        <div className="flex items-center space-x-3">
+          {/* API Keys Configuration Button (styled like user's screenshot header) */}
+          <button
+            onClick={onOpenApiKeysModal}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+              isAiConfigured
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 animate-pulse'
+            }`}
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>{isAiConfigured ? 'API Keys Connected' : 'API Keys Settings'}</span>
+          </button>
+
           {healthInfo && (
-            <div className="hidden md:flex items-center space-x-2 text-xs px-2.5 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-400">
+            <div className="hidden lg:flex items-center space-x-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-400">
               <span className={`w-2 h-2 rounded-full ${healthInfo.ffmpeg_status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               <span>FFmpeg: {healthInfo.ffmpeg_status}</span>
               <span className="text-slate-600">|</span>

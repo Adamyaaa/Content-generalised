@@ -79,4 +79,32 @@ export const api = {
     const res = await apiClient.delete(`/dashboard/concepts/${conceptId}`);
     return res.data;
   },
+
+  // Settings & API Keys
+  getKeysStatus: async () => {
+    const res = await apiClient.get('/settings/keys');
+    return res.data;
+  },
+
+  saveKey: async (service, keyValue, secondaryValue = null) => {
+    const res = await apiClient.post('/settings/keys', {
+      service,
+      key_value: keyValue,
+      secondary_value: secondaryValue,
+    });
+    return res.data;
+  },
+
+  testKey: async (service, keyValue = null) => {
+    const res = await apiClient.post('/settings/keys/test', {
+      service,
+      key_value: keyValue,
+    });
+    return res.data;
+  },
+
+  removeKey: async (service) => {
+    const res = await apiClient.delete(`/settings/keys/${service}`);
+    return res.data;
+  },
 };

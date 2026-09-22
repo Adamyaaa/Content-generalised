@@ -17,6 +17,7 @@ import ProfileSwitcher from './components/ProfileSwitcher';
 import IngestionBar from './components/IngestionBar';
 import ConceptCard from './components/ConceptCard';
 import ConceptDetailModal from './components/ConceptDetailModal';
+import ApiKeysModal from './components/ApiKeysModal';
 import { api } from './services/api';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
   const [concepts, setConcepts] = useState([]);
   const [selectedConceptId, setSelectedConceptId] = useState(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isApiKeysModalOpen, setIsApiKeysModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActiveBrandOnly, setFilterActiveBrandOnly] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -117,6 +119,7 @@ export default function App() {
       <Navbar
         activeProfile={activeProfile}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onOpenApiKeysModal={() => setIsApiKeysModalOpen(true)}
         healthInfo={healthInfo}
       />
 
@@ -211,6 +214,12 @@ export default function App() {
       </footer>
 
       {/* Modals */}
+      <ApiKeysModal
+        isOpen={isApiKeysModalOpen}
+        onClose={() => setIsApiKeysModalOpen(false)}
+        onKeysUpdated={loadInitialData}
+      />
+
       <ProfileSwitcher
         profiles={profiles}
         activeProfile={activeProfile}

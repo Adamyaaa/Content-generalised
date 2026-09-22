@@ -11,6 +11,7 @@ from app.api.profiles import router as profiles_router
 from app.api.ingestion import router as ingestion_router
 from app.api.dashboard import router as dashboard_router
 from app.api.health import router as health_router
+from app.api.settings import router as settings_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # API v1 Router Registration
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
 app.include_router(profiles_router, prefix="/api/v1")
 app.include_router(ingestion_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
