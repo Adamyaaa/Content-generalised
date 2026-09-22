@@ -24,7 +24,7 @@ export default function LandingPage({ onLaunchApp, onOpenApiKeysModal, activePro
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-emerald-500/10 via-teal-500/5 to-transparent blur-3xl pointer-events-none -z-10" />
 
       {/* Hero Section */}
-      <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section className="relative pt-20 pb-20 sm:pt-32 sm:pb-28 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         {/* Release / Announcement Badge */}
         <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-8 animate-fade-in shadow-sm shadow-emerald-500/10">
           <Sparkles className="w-3.5 h-3.5" />
