@@ -1,29 +1,59 @@
 import React from 'react';
 import { Sparkles, Sliders, Key, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export default function Navbar({ activeProfile, onOpenProfileModal, onOpenApiKeysModal, healthInfo }) {
+export default function Navbar({
+  activeProfile,
+  onOpenProfileModal,
+  onOpenApiKeysModal,
+  healthInfo,
+  currentView,
+  onNavigateLanding,
+  onNavigateApp
+}) {
   const isAiConfigured = healthInfo?.gemini_configured && healthInfo?.groq_configured;
 
   return (
     <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        {/* Brand - clicking logo or ContentEngine navigates to landing page */}
+        <div
+          onClick={onNavigateLanding}
+          className="flex items-center space-x-3 cursor-pointer group select-none transition"
+          title="Go to Landing Page"
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 group-hover:shadow-emerald-500/40 transition">
             <Sparkles className="w-5 h-5 text-slate-950" />
           </div>
           <div>
-            <span className="font-bold text-lg text-white tracking-tight block leading-tight">ContentEngine</span>
+            <span className="font-bold text-lg text-white tracking-tight block leading-tight group-hover:text-emerald-400 transition">
+              ContentEngine
+            </span>
             <p className="text-xs text-slate-400 mt-0.5">Content Reverse-Engineering & Brand Adaptation</p>
           </div>
         </div>
 
-        {/* Right side: API Keys & Active Brand */}
+        {/* Right side: Navigation, API Keys & Active Brand */}
         <div className="flex items-center space-x-3">
+          {currentView === 'landing' ? (
+            <button
+              onClick={onNavigateApp}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 transition cursor-pointer"
+            >
+              <span>Launch Workspace</span>
+            </button>
+          ) : (
+            <button
+              onClick={onNavigateLanding}
+              className="hidden sm:flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition cursor-pointer"
+            >
+              <span>Overview</span>
+            </button>
+          )}
+
           {/* API Keys Settings */}
           <button
             onClick={onOpenApiKeysModal}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
               isAiConfigured
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
@@ -36,7 +66,7 @@ export default function Navbar({ activeProfile, onOpenProfileModal, onOpenApiKey
           {activeProfile && (
             <button
               onClick={onOpenProfileModal}
-              className="flex items-center space-x-2 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-sm transition"
+              className="flex items-center space-x-2 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-sm transition cursor-pointer"
               title="Click to switch or edit brand profile"
             >
               <div className="text-left">

@@ -18,9 +18,11 @@ import IngestionBar from './components/IngestionBar';
 import ConceptCard from './components/ConceptCard';
 import ConceptDetailModal from './components/ConceptDetailModal';
 import ApiKeysModal from './components/ApiKeysModal';
+import LandingPage from './components/LandingPage';
 import { api } from './services/api';
 
 export default function App() {
+  const [currentView, setCurrentView] = useState('app');
   const [profiles, setProfiles] = useState([]);
   const [activeProfile, setActiveProfile] = useState(null);
   const [healthInfo, setHealthInfo] = useState(null);
@@ -121,92 +123,103 @@ export default function App() {
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
         onOpenApiKeysModal={() => setIsApiKeysModalOpen(true)}
         healthInfo={healthInfo}
+        currentView={currentView}
+        onNavigateLanding={() => setCurrentView('landing')}
+        onNavigateApp={() => setCurrentView('app')}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Hero & Ingestion Section */}
-        <div className="space-y-4">
-          <IngestionBar
-            activeProfile={activeProfile}
-            onConceptGenerated={handleConceptGenerated}
-          />
-        </div>
-
-        {/* Content Library Section */}
-        <div className="space-y-4 pt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2">
-                <Layers className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-xl font-bold text-white tracking-tight">Adapted Content Library</h2>
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-xs text-slate-400 font-mono">
-                  {filteredConcepts.length} concepts
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Viral narrative patterns adapted into high-authority drafts with zero emojis and real numbers.
-              </p>
-            </div>
-
-            {/* Controls: Search & Brand Filter */}
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Search concepts or formulas..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 w-48 sm:w-56"
-                />
-              </div>
-
-              <button
-                onClick={() => {
-                  const nextFilter = !filterActiveBrandOnly;
-                  setFilterActiveBrandOnly(nextFilter);
-                  loadConcepts(nextFilter && activeProfile ? activeProfile.client_id : null);
-                }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                  filterActiveBrandOnly
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Filter className="w-3.5 h-3.5" />
-                <span>{filterActiveBrandOnly ? 'Active Brand Only' : 'All Brands'}</span>
-              </button>
-            </div>
+      {currentView === 'landing' ? (
+        <LandingPage
+          onLaunchApp={() => setCurrentView('app')}
+          onOpenApiKeysModal={() => setIsApiKeysModalOpen(true)}
+          activeProfile={activeProfile}
+        />
+      ) : (
+        /* Main Workspace Container */
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {/* Hero & Ingestion Section */}
+          <div className="space-y-4">
+            <IngestionBar
+              activeProfile={activeProfile}
+              onConceptGenerated={handleConceptGenerated}
+            />
           </div>
 
-          {/* Cards Grid */}
-          {loading ? (
-            <div className="py-24 text-center text-slate-500 text-sm">Loading library...</div>
-          ) : filteredConcepts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredConcepts.map((concept) => (
-                <ConceptCard
-                  key={concept.id}
-                  concept={concept}
-                  onSelect={(id) => setSelectedConceptId(id)}
-                  onDeleteSuccess={handleDeleteSuccess}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="border border-dashed border-slate-800 rounded-2xl p-12 text-center bg-slate-900/30">
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500 mb-3">
-                <Sparkles className="w-6 h-6" />
+          {/* Content Library Section */}
+          <div className="space-y-4 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-emerald-400" />
+                  <h2 className="text-xl font-bold text-white tracking-tight">Adapted Content Library</h2>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-xs text-slate-400 font-mono">
+                    {filteredConcepts.length} concepts
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Viral narrative patterns adapted into high-authority drafts with zero emojis and real numbers.
+                </p>
               </div>
-              <h3 className="text-base font-bold text-slate-300">No adapted concepts yet</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                Paste a LinkedIn, YouTube, Instagram, or TikTok URL above (or upload a video) to trigger autonomous reverse-engineering.
-              </p>
+
+              {/* Controls: Search & Brand Filter */}
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search concepts or formulas..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 w-48 sm:w-56"
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    const nextFilter = !filterActiveBrandOnly;
+                    setFilterActiveBrandOnly(nextFilter);
+                    loadConcepts(nextFilter && activeProfile ? activeProfile.client_id : null);
+                  }}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                    filterActiveBrandOnly
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>{filterActiveBrandOnly ? 'Active Brand Only' : 'All Brands'}</span>
+                </button>
+              </div>
             </div>
-          )}
-        </div>
-      </main>
+
+            {/* Cards Grid */}
+            {loading ? (
+              <div className="py-24 text-center text-slate-500 text-sm">Loading library...</div>
+            ) : filteredConcepts.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredConcepts.map((concept) => (
+                  <ConceptCard
+                    key={concept.id}
+                    concept={concept}
+                    onSelect={(id) => setSelectedConceptId(id)}
+                    onDeleteSuccess={handleDeleteSuccess}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="border border-dashed border-slate-800 rounded-2xl p-12 text-center bg-slate-900/30">
+                <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500 mb-3">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-300">No adapted concepts yet</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Paste a LinkedIn, YouTube, Instagram, or TikTok URL above (or upload a video) to trigger autonomous reverse-engineering.
+                </p>
+              </div>
+            )}
+          </div>
+        </main>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-900 py-6 mt-16 text-center text-xs text-slate-600">
