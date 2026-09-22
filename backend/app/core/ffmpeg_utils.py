@@ -19,8 +19,21 @@ def get_ffmpeg_executable() -> str:
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
         if exe and os.path.exists(exe):
-            _FFMPEG_PATH = exe
-            logger.info(f"Using imageio_ffmpeg binary: {exe}")
+            bin_dir = os.path.dirname(exe)
+            # yt-dlp expects an exact 'ffmpeg.exe' file in the directory
+            alias_path = os.path.join(bin_dir, "ffmpeg.exe")
+            if not os.path.exists(alias_path):
+                try:
+                    shutil.copy2(exe, alias_path)
+                except Exception as alias_err:
+                    logger.debug(f"Could not create ffmpeg.exe alias: {alias_err}")
+            
+            # Ensure bin_dir is in system PATH for all child processes and yt-dlp
+            if bin_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
+            _FFMPEG_PATH = alias_path if os.path.exists(alias_path) else exe
+            logger.info(f"Using imageio_ffmpeg binary: {_FFMPEG_PATH}")
             return _FFMPEG_PATH
     except Exception as e:
         logger.debug(f"imageio_ffmpeg lookup failed: {e}")

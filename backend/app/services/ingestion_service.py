@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 import yt_dlp
 
 from app.core.config import settings
-from app.core.ffmpeg_utils import run_ffmpeg
+from app.core.ffmpeg_utils import run_ffmpeg, get_ffmpeg_executable
 
 logger = logging.getLogger(__name__)
 
@@ -194,18 +194,30 @@ class IngestionService:
         merge_output_format: 'mp4'
         """
         output_template = str(work_dir / "video.%(ext)s")
+        ffmpeg_exe = get_ffmpeg_executable()
+        bin_dir = os.path.dirname(ffmpeg_exe)
+
         ydl_opts = {
             "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "merge_output_format": "mp4",
             "outtmpl": output_template,
+            "ffmpeg_location": bin_dir,
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
         }
 
         def _run():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+            except Exception as primary_err:
+                logger.warning(f"yt-dlp primary merge failed ({primary_err}), retrying with direct single stream format...")
+                fallback_opts = dict(ydl_opts)
+                fallback_opts["format"] = "best[ext=mp4]/best"
+                fallback_opts.pop("merge_output_format", None)
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    ydl.download([url])
 
         # Run yt-dlp synchronously in threadpool
         import asyncio
