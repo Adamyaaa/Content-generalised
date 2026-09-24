@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2, Shield } from 'lucide-react';
+import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { api, keyStorage } from '../services/api';
 
 const SERVICES = {
@@ -144,14 +144,6 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Privacy Info Banner */}
-        <div className="mx-6 mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center space-x-2.5">
-          <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="text-[11px] text-emerald-200">
-            <strong>Private & Client-Side:</strong> Keys entered here are saved exclusively in your browser and sent securely per request. Each team member uses their own free API keys.
-          </span>
         </div>
 
         {/* Body: Providers list */}
