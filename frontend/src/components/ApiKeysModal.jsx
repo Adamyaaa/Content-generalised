@@ -17,20 +17,6 @@ const DEFAULT_SERVICES = {
     pricing_hint: 'About $0.04 per audio hour · free tier available',
     get_key_url: 'https://console.groq.com/keys',
   },
-  neon: {
-    name: 'Neon (Serverless Postgres)',
-    connected: false,
-    description: 'Serverless PostgreSQL database. Paste your Neon pooled connection string (DATABASE_URL).',
-    pricing_hint: 'Free tier with 0.5 GB storage & instant branching',
-    get_key_url: 'https://console.neon.tech',
-  },
-  supabase: {
-    name: 'Supabase (PostgreSQL Alternative)',
-    connected: false,
-    description: 'Cloud PostgreSQL database for storing brand profiles, queue state, and adapted concepts.',
-    pricing_hint: 'Free tier available · defaults to SQLite if blank',
-    get_key_url: 'https://supabase.com',
-  },
   rapidapi: {
     name: 'RapidAPI (Instagram Downloader)',
     connected: false,
@@ -52,7 +38,6 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [inputs, setInputs] = useState({});
-  const [secondaryInputs, setSecondaryInputs] = useState({});
   const [actionState, setActionState] = useState({}); // { [service]: { saving, testing, removing, message, success } }
 
   useEffect(() => {
@@ -95,12 +80,11 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
 
   const handleSave = async (service) => {
     const val = inputs[service];
-    const secVal = secondaryInputs[service];
     if (!val || !val.trim()) return;
 
     setStatus(service, { saving: true, message: null });
     try {
-      await api.saveKey(service, val.trim(), secVal ? secVal.trim() : null);
+      await api.saveKey(service, val.trim());
       setStatus(service, {
         saving: false,
         success: true,
@@ -164,7 +148,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
 
   if (!isOpen) return null;
 
-  const servicesList = ['gemini', 'groq', 'neon', 'supabase', 'rapidapi', 'cobalt'];
+  const servicesList = ['gemini', 'groq', 'rapidapi', 'cobalt'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
@@ -180,7 +164,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                 <h2 className="text-base font-bold text-white">API Keys & Integrations</h2>
                 {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
               </div>
-              <p className="text-xs text-slate-400">Configure AI models, database, speech-to-text, and download providers</p>
+              <p className="text-xs text-slate-400">Configure AI models, speech-to-text, and download providers</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -219,7 +203,6 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
 
             const state = actionState[serviceKey] || {};
             const inputValue = inputs[serviceKey] || '';
-            const secInputValue = secondaryInputs[serviceKey] || '';
 
             return (
               <div key={serviceKey} className="pt-6 first:pt-0 space-y-3">
@@ -248,7 +231,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                       rel="noreferrer"
                       className="text-xs text-slate-400 hover:text-emerald-400 flex items-center space-x-1 transition font-medium"
                     >
-                      <span>{serviceKey === 'neon' ? 'Open Neon Console' : 'Get a key'}</span>
+                      <span>Get a key</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
@@ -259,33 +242,13 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                   {item.description} {item.pricing_hint && `· ${item.pricing_hint}`}
                 </p>
 
-                {/* Secondary input if Supabase (needs URL + Key) */}
-                {serviceKey === 'supabase' && (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="https://your-project.supabase.co"
-                      value={secInputValue}
-                      onChange={(e) =>
-                        setSecondaryInputs({
-                          ...secondaryInputs,
-                          [serviceKey]: e.target.value,
-                        })
-                      }
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 mb-2 font-mono"
-                    />
-                  </div>
-                )}
-
                 {/* Input field row + Action buttons */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
-                    type={serviceKey === 'neon' || serviceKey === 'cobalt' ? 'text' : 'password'}
+                    type={serviceKey === 'cobalt' ? 'text' : 'password'}
                     autoComplete="off"
                     placeholder={
-                      serviceKey === 'neon'
-                        ? 'postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require'
-                        : item.connected
+                      item.connected
                         ? 'replace the key'
                         : 'paste your key'
                     }
