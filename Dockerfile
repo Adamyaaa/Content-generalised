@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
-COPY backend/requirements.txt .
+# Install Python dependencies from backend/
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code
+# Copy application source code from backend/
 COPY backend/app ./app
 
 # Create storage directory for media scratch and processing
