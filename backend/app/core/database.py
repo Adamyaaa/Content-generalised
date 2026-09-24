@@ -13,6 +13,7 @@ from app.models.profile import CompanyProfile
 from app.models.queue import TrendQueueItem, QueueStatus
 from app.models.analysis import ContentAnalysis
 from app.models.concept import ContentConcept
+from app.models.calendar import CalendarEvent, PostStatus, PlatformType
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,31 @@ class Database:
                     );
                 """)
 
-                # 5. app_settings (stores user-entered API keys so they persist across restarts)
+                # 5. content_calendar
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS content_calendar (
+                        id TEXT PRIMARY KEY,
+                        client_id TEXT NOT NULL,
+                        client_name TEXT NOT NULL,
+                        concept_id TEXT,
+                        platform TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        scheduled_date TEXT NOT NULL,
+                        scheduled_time TEXT,
+                        status TEXT NOT NULL,
+                        qa_score INTEGER,
+                        source_formula TEXT,
+                        notes TEXT,
+                        published_url TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY (client_id) REFERENCES company_profiles(client_id) ON DELETE CASCADE,
+                        FOREIGN KEY (concept_id) REFERENCES content_concepts(id) ON DELETE SET NULL
+                    );
+                """)
+
+                # 6. app_settings (stores user-entered API keys so they persist across restarts)
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS app_settings (
                         key_name TEXT PRIMARY KEY,
@@ -271,6 +296,29 @@ class Database:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE,
                     FOREIGN KEY (client_id) REFERENCES company_profiles(client_id)
+                );
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS content_calendar (
+                    id TEXT PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    client_name TEXT NOT NULL,
+                    concept_id TEXT,
+                    platform TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    scheduled_date TEXT NOT NULL,
+                    scheduled_time TEXT,
+                    status TEXT NOT NULL,
+                    qa_score INTEGER,
+                    source_formula TEXT,
+                    notes TEXT,
+                    published_url TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (client_id) REFERENCES company_profiles(client_id),
+                    FOREIGN KEY (concept_id) REFERENCES content_concepts(id)
                 );
             """)
 
@@ -377,6 +425,61 @@ class Database:
             ]
             for p in default_profiles:
                 self.create_profile(p)
+
+        # Seed sample calendar events if table is empty
+        existing_events = self.get_calendar_events()
+        if not existing_events:
+            today = datetime.now()
+            today_str = today.strftime("%Y-%m-%d")
+            
+            # Helper to calculate relative day string
+            def offset_date(days_offset):
+                from datetime import timedelta
+                return (today + timedelta(days=days_offset)).strftime("%Y-%m-%d")
+
+            sample_events = [
+                CalendarEvent(
+                    id="sample-cal-01",
+                    client_id="profile-devflow-01",
+                    client_name="DevFlow AI",
+                    platform=PlatformType.LINKEDIN,
+                    title="The Silent $40k/Month Cloud CI Leak & How We Fixed It",
+                    content="Senior engineers spend 15+ hours every week debugging flaky CI/CD test runners.\n\nHere is how deterministic agentic regression testing reduced build waste by 68% in 14 days:\n\n1. Static AST caching on PR diffs\n2. Automated sub-module mocking\n3. Zero-hallucination regression gates\n\nReview our open-source benchmarks or deploy DevFlow sandbox in 5 minutes.",
+                    scheduled_date=today_str,
+                    scheduled_time="09:00",
+                    status=PostStatus.SCHEDULED,
+                    qa_score=92,
+                    source_formula="Contrarian Technical Teardown + Real Numbers"
+                ),
+                CalendarEvent(
+                    id="sample-cal-02",
+                    client_id="profile-devflow-01",
+                    client_name="DevFlow AI",
+                    platform=PlatformType.INSTAGRAM,
+                    title="Stop Reviewing Boilerplate PRs Manually",
+                    content="[0:00 - 0:03] Scene 1\nVisual: Split screen of senior dev staring at git diff vs terminal running guard.\nDialogue: If your senior staff engineers are spending 3 hours a day reviewing import statements, your engineering velocity is broken.\nOverlay: The 3-Hour PR Trap\n\n[0:03 - 0:10] Scene 2\nVisual: Close up on automated CodeReview Guard linting in 12 seconds.\nDialogue: Here is how DevFlow catches 100% of semantic regressions before PR review.\nOverlay: 12-Second Static Guard",
+                    scheduled_date=offset_date(2),
+                    scheduled_time="17:30",
+                    status=PostStatus.PRODUCTION,
+                    qa_score=88,
+                    source_formula="Friction Agitation + Workflow Demo"
+                ),
+                CalendarEvent(
+                    id="sample-cal-03",
+                    client_id="profile-scaleops-02",
+                    client_name="ScaleOps Health",
+                    platform=PlatformType.WHATSAPP,
+                    title="ScaleOps Clinical Efficiency Memo",
+                    content="Clinical Director Briefing:\n\n70% of clinical staff hours are currently lost to manual intake paperwork and interstate licensure tracking.\n\nOur latest asynchronous triage hub deployment doubled patient intake capacity across 4 regional clinics with zero added coordinator headcount.\n\nReply 'TRIAGE' to review our clinical efficiency benchmark report.",
+                    scheduled_date=offset_date(4),
+                    scheduled_time="11:00",
+                    status=PostStatus.QA_APPROVED,
+                    qa_score=95,
+                    source_formula="Clinical Operational Teardown + ROI Proof"
+                )
+            ]
+            for evt in sample_events:
+                self.create_calendar_event(evt)
 
     # ================= COMPANY PROFILES =================
     def get_profiles(self) -> List[CompanyProfile]:
@@ -990,6 +1093,329 @@ class Database:
                 if queue_id:
                     cursor.execute("DELETE FROM content_analysis WHERE queue_id = ?", (queue_id,))
                     cursor.execute("DELETE FROM trend_queue WHERE id = ?", (queue_id,))
+                conn.commit()
+        return True
+
+    # ================= CONTENT CALENDAR =================
+    def create_calendar_event(self, event: CalendarEvent) -> CalendarEvent:
+        now = datetime.now(timezone.utc).isoformat()
+        if not event.id:
+            event.id = str(uuid.uuid4())
+        event.created_at = now
+        event.updated_at = now
+
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO content_calendar
+                        (id, client_id, client_name, concept_id, platform, title, content, scheduled_date, scheduled_time, status, qa_score, source_formula, notes, published_url, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            client_id = EXCLUDED.client_id,
+                            client_name = EXCLUDED.client_name,
+                            concept_id = EXCLUDED.concept_id,
+                            platform = EXCLUDED.platform,
+                            title = EXCLUDED.title,
+                            content = EXCLUDED.content,
+                            scheduled_date = EXCLUDED.scheduled_date,
+                            scheduled_time = EXCLUDED.scheduled_time,
+                            status = EXCLUDED.status,
+                            qa_score = EXCLUDED.qa_score,
+                            source_formula = EXCLUDED.source_formula,
+                            notes = EXCLUDED.notes,
+                            published_url = EXCLUDED.published_url,
+                            updated_at = EXCLUDED.updated_at;
+                    """, (
+                        event.id, event.client_id, event.client_name, event.concept_id,
+                        event.platform.value if hasattr(event.platform, 'value') else str(event.platform),
+                        event.title, event.content, event.scheduled_date, event.scheduled_time,
+                        event.status.value if hasattr(event.status, 'value') else str(event.status),
+                        event.qa_score, event.source_formula, event.notes, event.published_url,
+                        event.created_at, event.updated_at
+                    ))
+                    conn.commit()
+        elif self.use_supabase:
+            self.supabase.table("content_calendar").insert({
+                "id": event.id,
+                "client_id": event.client_id,
+                "client_name": event.client_name,
+                "concept_id": event.concept_id,
+                "platform": event.platform.value if hasattr(event.platform, 'value') else str(event.platform),
+                "title": event.title,
+                "content": event.content,
+                "scheduled_date": event.scheduled_date,
+                "scheduled_time": event.scheduled_time,
+                "status": event.status.value if hasattr(event.status, 'value') else str(event.status),
+                "qa_score": event.qa_score,
+                "source_formula": event.source_formula,
+                "notes": event.notes,
+                "published_url": event.published_url,
+                "created_at": event.created_at,
+                "updated_at": event.updated_at
+            }).execute()
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO content_calendar
+                    (id, client_id, client_name, concept_id, platform, title, content, scheduled_date, scheduled_time, status, qa_score, source_formula, notes, published_url, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    event.id, event.client_id, event.client_name, event.concept_id,
+                    event.platform.value if hasattr(event.platform, 'value') else str(event.platform),
+                    event.title, event.content, event.scheduled_date, event.scheduled_time,
+                    event.status.value if hasattr(event.status, 'value') else str(event.status),
+                    event.qa_score, event.source_formula, event.notes, event.published_url,
+                    event.created_at, event.updated_at
+                ))
+                conn.commit()
+        return event
+
+    def get_calendar_events(
+        self,
+        client_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        status: Optional[str] = None,
+        platform: Optional[str] = None
+    ) -> List[CalendarEvent]:
+        query = "SELECT * FROM content_calendar WHERE 1=1"
+        params = []
+
+        if client_id:
+            query += " AND client_id = ?" if not self.use_postgres else " AND client_id = %s"
+            params.append(client_id)
+        if start_date:
+            query += " AND scheduled_date >= ?" if not self.use_postgres else " AND scheduled_date >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND scheduled_date <= ?" if not self.use_postgres else " AND scheduled_date <= %s"
+            params.append(end_date)
+        if status:
+            query += " AND status = ?" if not self.use_postgres else " AND status = %s"
+            params.append(status)
+        if platform:
+            query += " AND platform = ?" if not self.use_postgres else " AND platform = %s"
+            params.append(platform)
+
+        query += " ORDER BY scheduled_date ASC, scheduled_time ASC, created_at ASC"
+
+        events = []
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(query, tuple(params))
+                    rows = cursor.fetchall()
+                    for r in rows:
+                        events.append(CalendarEvent(
+                            id=r["id"],
+                            client_id=r["client_id"],
+                            client_name=r["client_name"],
+                            concept_id=r.get("concept_id"),
+                            platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                            title=r["title"],
+                            content=r["content"],
+                            scheduled_date=r["scheduled_date"],
+                            scheduled_time=r.get("scheduled_time") or "09:00",
+                            status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                            qa_score=r.get("qa_score"),
+                            source_formula=r.get("source_formula"),
+                            notes=r.get("notes"),
+                            published_url=r.get("published_url"),
+                            created_at=str(r["created_at"]),
+                            updated_at=str(r["updated_at"])
+                        ))
+        elif self.use_supabase:
+            q = self.supabase.table("content_calendar").select("*").order("scheduled_date", desc=False)
+            if client_id:
+                q = q.eq("client_id", client_id)
+            if start_date:
+                q = q.gte("scheduled_date", start_date)
+            if end_date:
+                q = q.lte("scheduled_date", end_date)
+            if status:
+                q = q.eq("status", status)
+            if platform:
+                q = q.eq("platform", platform)
+            res = q.execute()
+            for r in res.data:
+                events.append(CalendarEvent(
+                    id=r["id"],
+                    client_id=r["client_id"],
+                    client_name=r["client_name"],
+                    concept_id=r.get("concept_id"),
+                    platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                    title=r["title"],
+                    content=r["content"],
+                    scheduled_date=r["scheduled_date"],
+                    scheduled_time=r.get("scheduled_time") or "09:00",
+                    status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                    qa_score=r.get("qa_score"),
+                    source_formula=r.get("source_formula"),
+                    notes=r.get("notes"),
+                    published_url=r.get("published_url"),
+                    created_at=str(r.get("created_at")),
+                    updated_at=str(r.get("updated_at"))
+                ))
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, tuple(params))
+                rows = cursor.fetchall()
+                for r in rows:
+                    events.append(CalendarEvent(
+                        id=r["id"],
+                        client_id=r["client_id"],
+                        client_name=r["client_name"],
+                        concept_id=r["concept_id"],
+                        platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                        title=r["title"],
+                        content=r["content"],
+                        scheduled_date=r["scheduled_date"],
+                        scheduled_time=r["scheduled_time"] or "09:00",
+                        status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                        qa_score=r["qa_score"],
+                        source_formula=r["source_formula"],
+                        notes=r["notes"],
+                        published_url=r["published_url"],
+                        created_at=str(r["created_at"]),
+                        updated_at=str(r["updated_at"])
+                    ))
+        return events
+
+    def get_calendar_event(self, event_id: str) -> Optional[CalendarEvent]:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM content_calendar WHERE id = %s", (event_id,))
+                    r = cursor.fetchone()
+                    if r:
+                        return CalendarEvent(
+                            id=r["id"],
+                            client_id=r["client_id"],
+                            client_name=r["client_name"],
+                            concept_id=r.get("concept_id"),
+                            platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                            title=r["title"],
+                            content=r["content"],
+                            scheduled_date=r["scheduled_date"],
+                            scheduled_time=r.get("scheduled_time") or "09:00",
+                            status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                            qa_score=r.get("qa_score"),
+                            source_formula=r.get("source_formula"),
+                            notes=r.get("notes"),
+                            published_url=r.get("published_url"),
+                            created_at=str(r["created_at"]),
+                            updated_at=str(r["updated_at"])
+                        )
+                    return None
+        elif self.use_supabase:
+            res = self.supabase.table("content_calendar").select("*").eq("id", event_id).execute()
+            if res.data:
+                r = res.data[0]
+                return CalendarEvent(
+                    id=r["id"],
+                    client_id=r["client_id"],
+                    client_name=r["client_name"],
+                    concept_id=r.get("concept_id"),
+                    platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                    title=r["title"],
+                    content=r["content"],
+                    scheduled_date=r["scheduled_date"],
+                    scheduled_time=r.get("scheduled_time") or "09:00",
+                    status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                    qa_score=r.get("qa_score"),
+                    source_formula=r.get("source_formula"),
+                    notes=r.get("notes"),
+                    published_url=r.get("published_url"),
+                    created_at=str(r.get("created_at")),
+                    updated_at=str(r.get("updated_at"))
+                )
+            return None
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM content_calendar WHERE id = ?", (event_id,))
+                r = cursor.fetchone()
+                if r:
+                    return CalendarEvent(
+                        id=r["id"],
+                        client_id=r["client_id"],
+                        client_name=r["client_name"],
+                        concept_id=r["concept_id"],
+                        platform=PlatformType(r["platform"]) if r["platform"] in PlatformType._value2member_map_ else PlatformType.CUSTOM,
+                        title=r["title"],
+                        content=r["content"],
+                        scheduled_date=r["scheduled_date"],
+                        scheduled_time=r["scheduled_time"] or "09:00",
+                        status=PostStatus(r["status"]) if r["status"] in PostStatus._value2member_map_ else PostStatus.SCHEDULED,
+                        qa_score=r["qa_score"],
+                        source_formula=r["source_formula"],
+                        notes=r["notes"],
+                        published_url=r["published_url"],
+                        created_at=str(r["created_at"]),
+                        updated_at=str(r["updated_at"])
+                    )
+                return None
+
+    def update_calendar_event(self, event_id: str, updates: dict) -> Optional[CalendarEvent]:
+        existing = self.get_calendar_event(event_id)
+        if not existing:
+            return None
+
+        now = datetime.now(timezone.utc).isoformat()
+        updates["updated_at"] = now
+
+        # Convert enums to value
+        cleaned = {}
+        for k, v in updates.items():
+            if v is not None:
+                if hasattr(v, 'value'):
+                    cleaned[k] = v.value
+                else:
+                    cleaned[k] = v
+
+        if not cleaned:
+            return existing
+
+        set_clause_parts = []
+        vals = []
+        for k, v in cleaned.items():
+            placeholder = "%s" if self.use_postgres else "?"
+            set_clause_parts.append(f"{k} = {placeholder}")
+            vals.append(v)
+        vals.append(event_id)
+
+        set_clause = ", ".join(set_clause_parts)
+
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"UPDATE content_calendar SET {set_clause} WHERE id = %s", tuple(vals))
+                    conn.commit()
+        elif self.use_supabase:
+            self.supabase.table("content_calendar").update(cleaned).eq("id", event_id).execute()
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE content_calendar SET {set_clause} WHERE id = ?", tuple(vals))
+                conn.commit()
+
+        return self.get_calendar_event(event_id)
+
+    def delete_calendar_event(self, event_id: str) -> bool:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM content_calendar WHERE id = %s", (event_id,))
+                    conn.commit()
+        elif self.use_supabase:
+            self.supabase.table("content_calendar").delete().eq("id", event_id).execute()
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM content_calendar WHERE id = ?", (event_id,))
                 conn.commit()
         return True
 

@@ -10,7 +10,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import Navbar from './components/Navbar';
 import ProfileSwitcher from './components/ProfileSwitcher';
@@ -19,10 +20,12 @@ import ConceptCard from './components/ConceptCard';
 import ConceptDetailModal from './components/ConceptDetailModal';
 import ApiKeysModal from './components/ApiKeysModal';
 import LandingPage from './components/LandingPage';
+import ContentCalendar from './components/calendar/ContentCalendar';
+import SchedulePostModal from './components/calendar/SchedulePostModal';
 import { api } from './services/api';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('app');
+  const [currentView, setCurrentView] = useState('app'); // 'landing' | 'app' | 'calendar'
   const [profiles, setProfiles] = useState([]);
   const [activeProfile, setActiveProfile] = useState(null);
   const [healthInfo, setHealthInfo] = useState(null);
@@ -33,6 +36,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActiveBrandOnly, setFilterActiveBrandOnly] = useState(true);
   const [loading, setLoading] = useState(true);
+
+  // Global Schedule Modal State (for scheduling from ConceptCard or DetailModal)
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduleModalData, setScheduleModalData] = useState(null);
 
   // Load initial health, profiles, and concepts
   useEffect(() => {
@@ -104,6 +111,42 @@ export default function App() {
     setConcepts((prev) => prev.filter((c) => c.id !== deletedId));
   };
 
+  // Schedule trigger from ConceptCard
+  const handleScheduleFromCard = (concept) => {
+    setScheduleModalData({
+      client_id: concept.client_id,
+      client_name: concept.client_name,
+      concept_id: concept.id,
+      platform: 'linkedin',
+      title: concept.title,
+      content: concept.platform_ideations?.linkedin_post || '',
+      scheduled_date: new Date().toISOString().split('T')[0],
+      scheduled_time: '09:00',
+      status: 'scheduled',
+      qa_score: concept.qa_evaluation?.total_score,
+      source_formula: concept.source_formula
+    });
+    setIsScheduleModalOpen(true);
+  };
+
+  // Direct schedule trigger from ConceptDetailModal tabs
+  const handleDirectSchedule = (postData) => {
+    setScheduleModalData({
+      client_id: postData.client_id,
+      client_name: postData.client_name,
+      concept_id: postData.concept_id,
+      platform: postData.platform || 'linkedin',
+      title: postData.title || '',
+      content: postData.content || '',
+      scheduled_date: new Date().toISOString().split('T')[0],
+      scheduled_time: '09:00',
+      status: 'scheduled',
+      qa_score: postData.qa_score,
+      source_formula: postData.source_formula
+    });
+    setIsScheduleModalOpen(true);
+  };
+
   const filteredConcepts = concepts.filter((c) => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -126,6 +169,7 @@ export default function App() {
         currentView={currentView}
         onNavigateLanding={() => setCurrentView('landing')}
         onNavigateApp={() => setCurrentView('app')}
+        onNavigateCalendar={() => setCurrentView('calendar')}
       />
 
       {currentView === 'landing' ? (
@@ -134,8 +178,18 @@ export default function App() {
           onOpenApiKeysModal={() => setIsApiKeysModalOpen(true)}
           activeProfile={activeProfile}
         />
+      ) : currentView === 'calendar' ? (
+        /* Content Calendar View */
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <ContentCalendar
+            activeProfile={activeProfile}
+            profiles={profiles}
+            filterActiveBrandOnly={filterActiveBrandOnly}
+            onToggleFilterActiveBrand={() => setFilterActiveBrandOnly(!filterActiveBrandOnly)}
+          />
+        </main>
       ) : (
-        /* Main Workspace Container */
+        /* Main Workspace Container (Ingestion + Adapted Concepts Library) */
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
           {/* Hero & Ingestion Section */}
           <div className="space-y-4">
@@ -161,16 +215,24 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Controls: Search & Brand Filter */}
+              {/* Controls: Search, Brand Filter, & View Calendar Shortcut */}
               <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setCurrentView('calendar')}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition cursor-pointer"
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  <span>Open Calendar</span>
+                </button>
+
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Search concepts or formulas..."
+                    placeholder="Search concepts..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 w-48 sm:w-56"
+                    className="bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 w-36 sm:w-48"
                   />
                 </div>
 
@@ -203,6 +265,7 @@ export default function App() {
                     concept={concept}
                     onSelect={(id) => setSelectedConceptId(id)}
                     onDeleteSuccess={handleDeleteSuccess}
+                    onSchedule={handleScheduleFromCard}
                   />
                 ))}
               </div>
@@ -245,6 +308,21 @@ export default function App() {
       <ConceptDetailModal
         conceptId={selectedConceptId}
         onClose={() => setSelectedConceptId(null)}
+        onSchedulePost={handleDirectSchedule}
+      />
+
+      <SchedulePostModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => {
+          setIsScheduleModalOpen(false);
+          setScheduleModalData(null);
+        }}
+        initialData={scheduleModalData}
+        activeProfile={activeProfile}
+        profiles={profiles}
+        onSaved={() => {
+          // If we are currently in workspace, offer a smooth transition or notification
+        }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Sliders, Key, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, Sliders, Key, CheckCircle2, AlertCircle, Layers, Calendar } from 'lucide-react';
 
 export default function Navbar({
   activeProfile,
@@ -8,7 +8,8 @@ export default function Navbar({
   healthInfo,
   currentView,
   onNavigateLanding,
-  onNavigateApp
+  onNavigateApp,
+  onNavigateCalendar
 }) {
   const isAiConfigured = healthInfo?.gemini_configured && healthInfo?.groq_configured;
 
@@ -16,20 +17,51 @@ export default function Navbar({
     <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand - clicking logo or ContentEngine navigates to landing page */}
-        <div
-          onClick={onNavigateLanding}
-          className="flex items-center space-x-3 cursor-pointer group select-none transition"
-          title="Go to Landing Page"
-        >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 group-hover:shadow-emerald-500/40 transition">
-            <Sparkles className="w-5 h-5 text-slate-950" />
+        <div className="flex items-center space-x-6">
+          <div
+            onClick={onNavigateLanding}
+            className="flex items-center space-x-3 cursor-pointer group select-none transition"
+            title="Go to Landing Page"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 group-hover:shadow-emerald-500/40 transition">
+              <Sparkles className="w-5 h-5 text-slate-950" />
+            </div>
+            <div>
+              <span className="font-bold text-lg text-white tracking-tight block leading-tight group-hover:text-emerald-400 transition">
+                ContentEngine
+              </span>
+              <p className="text-xs text-slate-400 mt-0.5">Viral Adaptation & Calendar Strategy</p>
+            </div>
           </div>
-          <div>
-            <span className="font-bold text-lg text-white tracking-tight block leading-tight group-hover:text-emerald-400 transition">
-              ContentEngine
-            </span>
-            <p className="text-xs text-slate-400 mt-0.5">Content Reverse-Engineering & Brand Adaptation</p>
-          </div>
+
+          {/* Primary View Switcher (Workspace vs Content Calendar) */}
+          {currentView !== 'landing' && (
+            <nav className="hidden md:flex items-center bg-slate-950/70 border border-slate-800 rounded-xl p-1">
+              <button
+                onClick={onNavigateApp}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  currentView === 'app'
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Workspace</span>
+              </button>
+
+              <button
+                onClick={onNavigateCalendar}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  currentView === 'calendar'
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Content Calendar</span>
+              </button>
+            </nav>
+          )}
         </div>
 
         {/* Right side: Navigation, API Keys & Active Brand */}

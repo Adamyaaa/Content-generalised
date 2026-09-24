@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, Trash2, ExternalLink, ShieldCheck, Zap, MessageSquare, Video, Share2 } from 'lucide-react';
 import { api } from '../services/api';
 
-export default function ConceptCard({ concept, onSelect, onDeleteSuccess }) {
+export default function ConceptCard({ concept, onSelect, onDeleteSuccess, onSchedule }) {
   const [deleting, setDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -16,6 +16,13 @@ export default function ConceptCard({ concept, onSelect, onDeleteSuccess }) {
       alert(`Delete failed: ${err.message}`);
       setDeleting(false);
       setShowConfirm(false);
+    }
+  };
+
+  const handleScheduleClick = (e) => {
+    e.stopPropagation();
+    if (onSchedule) {
+      onSchedule(concept);
     }
   };
 
@@ -58,6 +65,17 @@ export default function ConceptCard({ concept, onSelect, onDeleteSuccess }) {
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>{qaScore}/100</span>
             </div>
+
+            {/* Schedule shortcut button */}
+            {onSchedule && (
+              <button
+                onClick={handleScheduleClick}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition cursor-pointer"
+                title="Schedule to Content Calendar"
+              >
+                <Calendar className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Delete button (hover action) */}
             <div className="relative" onClick={(e) => e.stopPropagation()}>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Film, Sparkles, MessageSquare, Video, Check, Copy, Share2, Layers, ShieldCheck, ChevronRight, HelpCircle, AlertCircle } from 'lucide-react';
+import { X, Film, Sparkles, MessageSquare, Video, Check, Copy, Share2, Layers, ShieldCheck, ChevronRight, HelpCircle, AlertCircle, Calendar, CalendarPlus, Zap, FileText } from 'lucide-react';
 import { api, getMediaUrl } from '../services/api';
 
-export default function ConceptDetailModal({ conceptId, onClose }) {
+export default function ConceptDetailModal({ conceptId, onClose, onSchedulePost }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('source_intel'); // 'source_intel', 'scenes', 'linkedin', 'whatsapp', 'psychology', 'qa'
@@ -258,30 +258,58 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                       <h3 className="font-bold text-sm text-white">Scene-by-Scene Video Production Breakdown</h3>
                       <p className="text-xs text-slate-400">Pacing, visual hooks, spoken voiceover, and kinetic text overlays</p>
                     </div>
-                    <button
-                      onClick={() => {
-                        const fullScript = concept.scenes
-                          .map(
-                            (s) =>
-                              `[${s.timestamp_range}] Scene ${s.scene_number}\nVisual: ${s.visual_cue}\nDialogue: ${s.voiceover_dialogue}\nOn-screen text: ${s.text_overlay}`
-                          )
-                          .join('\n\n');
-                        copyToClipboard(fullScript, 'full_script');
-                      }}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-medium transition"
-                    >
-                      {copiedKey === 'full_script' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-emerald-400">Copied Script!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy Full Script</span>
-                        </>
+                    <div className="flex items-center space-x-2">
+                      {onSchedulePost && (
+                        <button
+                          onClick={() => {
+                            const fullScript = concept.scenes
+                              .map(
+                                (s) =>
+                                  `[${s.timestamp_range}] Scene ${s.scene_number}\nVisual: ${s.visual_cue}\nDialogue: ${s.voiceover_dialogue}\nOn-screen text: ${s.text_overlay}`
+                              )
+                              .join('\n\n');
+                            onSchedulePost({
+                              client_id: concept.client_id,
+                              client_name: concept.client_name,
+                              concept_id: concept.id,
+                              platform: 'instagram',
+                              title: `Reel: ${concept.title}`,
+                              content: fullScript,
+                              qa_score: concept.qa_evaluation?.total_score,
+                              source_formula: concept.source_formula
+                            });
+                          }}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Schedule Reel</span>
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() => {
+                          const fullScript = concept.scenes
+                            .map(
+                              (s) =>
+                                `[${s.timestamp_range}] Scene ${s.scene_number}\nVisual: ${s.visual_cue}\nDialogue: ${s.voiceover_dialogue}\nOn-screen text: ${s.text_overlay}`
+                            )
+                            .join('\n\n');
+                          copyToClipboard(fullScript, 'full_script');
+                        }}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-medium transition cursor-pointer"
+                      >
+                        {copiedKey === 'full_script' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-400">Copied Script!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Full Script</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -322,24 +350,46 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                       <h3 className="font-bold text-sm text-white">High-Authority LinkedIn Breakdown</h3>
                       <p className="text-xs text-slate-400">Zero emojis, punchy line breaks, real numbers, and clear CTA</p>
                     </div>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(concept.platform_ideations.linkedin_post, 'linkedin')
-                      }
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
-                    >
-                      {copiedKey === 'linkedin' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Copied Post!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>One-Click Copy</span>
-                        </>
+                    <div className="flex items-center space-x-2">
+                      {onSchedulePost && (
+                        <button
+                          onClick={() => {
+                            onSchedulePost({
+                              client_id: concept.client_id,
+                              client_name: concept.client_name,
+                              concept_id: concept.id,
+                              platform: 'linkedin',
+                              title: concept.title,
+                              content: concept.platform_ideations.linkedin_post,
+                              qa_score: concept.qa_evaluation?.total_score,
+                              source_formula: concept.source_formula
+                            });
+                          }}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Schedule to Calendar</span>
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(concept.platform_ideations.linkedin_post, 'linkedin')
+                        }
+                        className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                      >
+                        {copiedKey === 'linkedin' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied Post!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>One-Click Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
@@ -360,24 +410,46 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                       <h3 className="font-bold text-sm text-white">Direct WhatsApp Client Broadcast</h3>
                       <p className="text-xs text-slate-400">Conversational, high-value, direct message format for WhatsApp VIPs or groups</p>
                     </div>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(concept.platform_ideations.whatsapp_broadcast, 'whatsapp')
-                      }
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
-                    >
-                      {copiedKey === 'whatsapp' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Copied Message!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>One-Click Copy</span>
-                        </>
+                    <div className="flex items-center space-x-2">
+                      {onSchedulePost && (
+                        <button
+                          onClick={() => {
+                            onSchedulePost({
+                              client_id: concept.client_id,
+                              client_name: concept.client_name,
+                              concept_id: concept.id,
+                              platform: 'whatsapp',
+                              title: `WhatsApp: ${concept.title}`,
+                              content: concept.platform_ideations.whatsapp_broadcast,
+                              qa_score: concept.qa_evaluation?.total_score,
+                              source_formula: concept.source_formula
+                            });
+                          }}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Schedule Drop</span>
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(concept.platform_ideations.whatsapp_broadcast, 'whatsapp')
+                        }
+                        className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-white text-xs font-semibold shadow transition cursor-pointer"
+                      >
+                        {copiedKey === 'whatsapp' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied Message!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>One-Click Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">

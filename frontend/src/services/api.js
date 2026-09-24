@@ -155,4 +155,53 @@ export const api = {
     });
     return res.data;
   },
+
+  // Content Calendar
+  getCalendarEvents: async (params = {}) => {
+    const res = await apiClient.get('/calendar', { params });
+    return res.data;
+  },
+
+  getCalendarEvent: async (eventId) => {
+    const res = await apiClient.get(`/calendar/${eventId}`);
+    return res.data;
+  },
+
+  createCalendarEvent: async (eventData) => {
+    const res = await apiClient.post('/calendar', eventData);
+    return res.data;
+  },
+
+  updateCalendarEvent: async (eventId, eventData) => {
+    const res = await apiClient.put(`/calendar/${eventId}`, eventData);
+    return res.data;
+  },
+
+  rescheduleCalendarEvent: async (eventId, scheduledDate, scheduledTime = null) => {
+    const res = await apiClient.patch(`/calendar/${eventId}/reschedule`, {
+      scheduled_date: scheduledDate,
+      scheduled_time: scheduledTime,
+    });
+    return res.data;
+  },
+
+  updateCalendarEventStatus: async (eventId, status) => {
+    const res = await apiClient.patch(`/calendar/${eventId}/status`, { status });
+    return res.data;
+  },
+
+  deleteCalendarEvent: async (eventId) => {
+    const res = await apiClient.delete(`/calendar/${eventId}`);
+    return res.data;
+  },
+
+  getExportCsvUrl: (clientId = null) => {
+    const base = `${API_BASE}/calendar/export/csv`;
+    return clientId ? `${base}?client_id=${encodeURIComponent(clientId)}` : base;
+  },
+
+  getExportIcsUrl: (clientId = null) => {
+    const base = `${API_BASE}/calendar/export/ics`;
+    return clientId ? `${base}?client_id=${encodeURIComponent(clientId)}` : base;
+  },
 };
