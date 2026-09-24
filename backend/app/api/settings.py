@@ -23,7 +23,7 @@ def mask_key(key: Optional[str]) -> Optional[str]:
 
 
 def update_env_file(key_name: str, value: str):
-    """Write or update a key in the backend .env file and in runtime settings."""
+    """Write or update a key in .env, runtime settings, and persistent database."""
     env_content = ""
     if ENV_PATH.exists():
         env_content = ENV_PATH.read_text(encoding="utf-8")
@@ -36,10 +36,24 @@ def update_env_file(key_name: str, value: str):
     else:
         env_content += f"\n{new_line}"
 
-    ENV_PATH.write_text(env_content.strip() + "\n", encoding="utf-8")
-    # Update runtime settings
+    try:
+        ENV_PATH.write_text(env_content.strip() + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    # Update runtime settings in memory
     setattr(settings, key_name, value)
     os.environ[key_name] = value
+
+    # Persist in database so it survives container restarts
+    try:
+        from app.core.database import db
+        if value and value.strip():
+            db.set_setting(key_name, value.strip())
+        else:
+            db.delete_setting(key_name)
+    except Exception as e:
+        logger.warning(f"Could not persist setting {key_name} to database: {e}")
 
 
 @router.get("/keys")

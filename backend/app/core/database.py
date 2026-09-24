@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import sqlite3
@@ -105,6 +106,7 @@ class Database:
             self._init_postgres()
         elif not self.use_supabase:
             self._init_sqlite()
+        self.load_all_settings_into_runtime()
         self._seed_default_profiles()
 
     def _init_postgres(self):
@@ -184,6 +186,15 @@ class Database:
                         FOREIGN KEY (client_id) REFERENCES company_profiles(client_id) ON DELETE CASCADE
                     );
                 """)
+
+                # 5. app_settings (stores user-entered API keys so they persist across restarts)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS app_settings (
+                        key_name TEXT PRIMARY KEY,
+                        key_value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                """)
                 conn.commit()
                 logger.info("PostgreSQL / Neon database schema verified.")
 
@@ -260,6 +271,14 @@ class Database:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE,
                     FOREIGN KEY (client_id) REFERENCES company_profiles(client_id)
+                );
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key_name TEXT PRIMARY KEY,
+                    key_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 );
             """)
             conn.commit()
@@ -974,5 +993,82 @@ class Database:
                 conn.commit()
         return True
 
+    # ================= APP SETTINGS (PERSISTENT KEYS) =================
+    def get_setting(self, key_name: str) -> Optional[str]:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT key_value FROM app_settings WHERE key_name = %s", (key_name,))
+                    row = cursor.fetchone()
+                    return row["key_value"] if row else None
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT key_value FROM app_settings WHERE key_name = ?", (key_name,))
+                row = cursor.fetchone()
+                return row["key_value"] if row else None
+
+    def set_setting(self, key_name: str, key_value: str):
+        now = datetime.now(timezone.utc).isoformat()
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO app_settings (key_name, key_value, updated_at)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (key_name) DO UPDATE SET
+                            key_value = EXCLUDED.key_value,
+                            updated_at = EXCLUDED.updated_at;
+                    """, (key_name, key_value, now))
+                    conn.commit()
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO app_settings (key_name, key_value, updated_at)
+                    VALUES (?, ?, ?)
+                """, (key_name, key_value, now))
+                conn.commit()
+
+    def delete_setting(self, key_name: str):
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM app_settings WHERE key_name = %s", (key_name,))
+                    conn.commit()
+        else:
+            with self._get_sqlite_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM app_settings WHERE key_name = ?", (key_name,))
+                conn.commit()
+
+    def load_all_settings_into_runtime(self):
+        """Restore all keys stored in Neon/SQLite into runtime memory on startup."""
+        try:
+            rows = []
+            if self.use_postgres:
+                with self._get_postgres_conn() as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("SELECT key_name, key_value FROM app_settings")
+                        rows = cursor.fetchall()
+            else:
+                with self._get_sqlite_conn() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT key_name, key_value FROM app_settings")
+                    rows = cursor.fetchall()
+
+            count = 0
+            for row in rows:
+                k, v = row["key_name"], row["key_value"]
+                if v and hasattr(settings, k):
+                    setattr(settings, k, v)
+                    os.environ[k] = v
+                    count += 1
+            if count > 0:
+                logger.info(f"Loaded {count} integration keys from database into runtime settings.")
+        except Exception as e:
+            logger.warning(f"Could not load settings from database: {e}")
+
 
 db = Database()
+
