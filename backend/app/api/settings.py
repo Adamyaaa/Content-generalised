@@ -188,6 +188,28 @@ async def test_key(payload: TestKeyRequest):
             logger.error(f"Groq test failed: {e}")
             return {"success": False, "message": f"Groq connection failed: {str(e)}"}
 
+    elif service == "rapidapi":
+        key = test_key_val or settings.RAPIDAPI_KEY
+        if not key:
+            raise HTTPException(status_code=400, detail="No RapidAPI key provided to test.")
+        try:
+            import httpx
+            headers = {
+                "x-rapidapi-key": key,
+                "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
+            }
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(
+                    "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/",
+                    params={"url": "https://www.instagram.com/reel/test/"},
+                    headers=headers
+                )
+                if resp.status_code in (200, 400, 404):
+                    return {"success": True, "message": "RapidAPI key verified successfully!"}
+                return {"success": False, "message": f"RapidAPI returned status {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "message": f"RapidAPI test failed: {e}"}
+
     elif service == "cobalt":
         url = test_key_val or settings.COBALT_API_URL
         if not url:

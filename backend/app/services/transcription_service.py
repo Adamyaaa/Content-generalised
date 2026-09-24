@@ -9,7 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class TranscriptionService:
-    async def transcribe(self, audio_path: str, transcript_override_path: Optional[str] = None) -> str:
+    async def transcribe(
+        self,
+        audio_path: str,
+        transcript_override_path: Optional[str] = None,
+        groq_key: Optional[str] = None,
+        gemini_key: Optional[str] = None,
+    ) -> str:
         """
         Two-layer transcription resilience:
         1. Check transcript_override.txt (LinkedIn photo fallback).
@@ -26,11 +32,14 @@ class TranscriptionService:
             except Exception as e:
                 logger.warning(f"Failed to read transcript_override.txt: {e}")
 
+        active_groq_key = groq_key or settings.GROQ_API_KEY
+        active_gemini_key = gemini_key or settings.GEMINI_API_KEY
+
         # 2. Try Groq Whisper (whisper-large-v3)
-        if settings.GROQ_API_KEY:
+        if active_groq_key:
             logger.info("Attempting primary transcription via Groq Whisper (whisper-large-v3)...")
             try:
-                text = await self._transcribe_groq(audio_path)
+                text = await self._transcribe_groq(audio_path, active_groq_key)
                 if text and text.strip():
                     logger.info(f"Groq Whisper transcription succeeded ({len(text)} chars).")
                     return text.strip()
@@ -40,10 +49,10 @@ class TranscriptionService:
             logger.info("No Groq API key configured. Bypassing directly to Gemini multimodal audio transcription.")
 
         # 3. Fallback: Gemini Multimodal Audio Transcription
-        if settings.GEMINI_API_KEY:
+        if active_gemini_key:
             logger.info(f"Attempting fallback audio transcription via Gemini ({settings.GEMINI_MODEL})...")
             try:
-                text = await self._transcribe_gemini_audio(audio_path)
+                text = await self._transcribe_gemini_audio(audio_path, active_gemini_key)
                 if text and text.strip():
                     logger.info(f"Gemini audio transcription succeeded ({len(text)} chars).")
                     return text.strip()
@@ -54,12 +63,12 @@ class TranscriptionService:
         logger.warning("No transcription service succeeded. Providing default transcription placeholder.")
         return "Video demonstrating technical product workflow, visual metrics, and architectural breakdown."
 
-    async def _transcribe_groq(self, audio_path: str) -> str:
+    async def _transcribe_groq(self, audio_path: str, api_key: str) -> str:
         import asyncio
         from groq import Groq
 
         def _run_groq():
-            client = Groq(api_key=settings.GROQ_API_KEY)
+            client = Groq(api_key=api_key)
             with open(audio_path, "rb") as f:
                 transcription = client.audio.transcriptions.create(
                     file=(os.path.basename(audio_path), f.read()),
@@ -72,12 +81,12 @@ class TranscriptionService:
         result = await loop.run_in_executor(None, _run_groq)
         return str(result)
 
-    async def _transcribe_gemini_audio(self, audio_path: str) -> str:
+    async def _transcribe_gemini_audio(self, audio_path: str, api_key: str) -> str:
         import asyncio
         import google.generativeai as genai
 
         def _run_gemini():
-            genai.configure(api_key=settings.GEMINI_API_KEY)
+            genai.configure(api_key=api_key)
             model = genai.GenerativeModel(settings.GEMINI_MODEL)
             
             with open(audio_path, "rb") as f:

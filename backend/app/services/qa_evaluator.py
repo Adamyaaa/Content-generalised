@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class BrandQAEvaluator:
-    async def evaluate(self, concept: ContentConcept, profile: CompanyProfile) -> QAEvaluation:
+    async def evaluate(self, concept: ContentConcept, profile: CompanyProfile, gemini_key: Optional[str] = None) -> QAEvaluation:
         """
         Brand QA Evaluator evaluates against:
         1. Hook strength (1-10)
@@ -22,12 +22,14 @@ class BrandQAEvaluator:
         Total score: composite out of 100.
         Threshold: 80/100.
         """
+        active_key = gemini_key or settings.GEMINI_API_KEY
+
         # Hard check for emojis
         full_text = f"{concept.title} {concept.platform_ideations.linkedin_post} {concept.platform_ideations.instagram_reel_script} {concept.platform_ideations.whatsapp_broadcast}"
         emoji_matches = EMOJI_REGEX.findall(full_text)
         has_emojis = len(emoji_matches) > 0
 
-        if not settings.GEMINI_API_KEY:
+        if not active_key:
             # Deterministic fallback evaluation
             anti_ai = 5 if has_emojis else 10
             voice = 9
@@ -51,7 +53,7 @@ class BrandQAEvaluator:
         import asyncio
 
         def _run_qa():
-            genai.configure(api_key=settings.GEMINI_API_KEY)
+            genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
                 model_name=settings.GEMINI_MODEL,
                 generation_config={

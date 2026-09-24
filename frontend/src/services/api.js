@@ -15,11 +15,65 @@ export const getMediaUrl = (path) => {
   return `${BACKEND_URL}${cleanPath}`;
 };
 
+export const keyStorage = {
+  getKey: (service) => {
+    try {
+      return localStorage.getItem(`user_${service}_key`) || '';
+    } catch {
+      return '';
+    }
+  },
+  setKey: (service, val) => {
+    try {
+      if (val && val.trim()) {
+        localStorage.setItem(`user_${service}_key`, val.trim());
+      } else {
+        localStorage.removeItem(`user_${service}_key`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+  removeKey: (service) => {
+    try {
+      localStorage.removeItem(`user_${service}_key`);
+    } catch (e) {
+      console.error(e);
+    }
+  },
+  getAllKeys: () => {
+    return {
+      gemini: keyStorage.getKey('gemini'),
+      groq: keyStorage.getKey('groq'),
+      rapidapi: keyStorage.getKey('rapidapi'),
+      cobalt: keyStorage.getKey('cobalt'),
+    };
+  }
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Attach user's personal API keys from their browser localStorage to every request
+apiClient.interceptors.request.use((config) => {
+  try {
+    const geminiKey = keyStorage.getKey('gemini');
+    const groqKey = keyStorage.getKey('groq');
+    const rapidapiKey = keyStorage.getKey('rapidapi');
+    const cobaltUrl = keyStorage.getKey('cobalt');
+
+    if (geminiKey) config.headers['X-Gemini-Key'] = geminiKey;
+    if (groqKey) config.headers['X-Groq-Key'] = groqKey;
+    if (rapidapiKey) config.headers['X-RapidAPI-Key'] = rapidapiKey;
+    if (cobaltUrl) config.headers['X-Cobalt-URL'] = cobaltUrl;
+  } catch (e) {
+    console.warn('Could not read user keys from localStorage:', e);
+  }
+  return config;
 });
 
 export const api = {
@@ -93,31 +147,12 @@ export const api = {
     return res.data;
   },
 
-  // Settings & API Keys
-  getKeysStatus: async () => {
-    const res = await apiClient.get('/settings/keys');
-    return res.data;
-  },
-
-  saveKey: async (service, keyValue, secondaryValue = null) => {
-    const res = await apiClient.post('/settings/keys', {
-      service,
-      key_value: keyValue,
-      secondary_value: secondaryValue,
-    });
-    return res.data;
-  },
-
+  // Settings & API Keys (Per-user test endpoint)
   testKey: async (service, keyValue = null) => {
     const res = await apiClient.post('/settings/keys/test', {
       service,
-      key_value: keyValue,
+      key_value: keyValue || keyStorage.getKey(service),
     });
-    return res.data;
-  },
-
-  removeKey: async (service) => {
-    const res = await apiClient.delete(`/settings/keys/${service}`);
     return res.data;
   },
 };

@@ -1,74 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2, RefreshCw } from 'lucide-react';
-import { api } from '../services/api';
+import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2, Shield } from 'lucide-react';
+import { api, keyStorage } from '../services/api';
 
-const DEFAULT_SERVICES = {
+const SERVICES = {
   gemini: {
     name: 'Gemini (Multimodal Vision & Analysis)',
-    connected: false,
     description: 'Multimodal visual reverse-engineering, narrative extraction & brand adaptation. Uses gemini-flash-lite-latest.',
     pricing_hint: 'Has generous free tier (15 RPM)',
     get_key_url: 'https://aistudio.google.com/app/apikey',
+    placeholder: 'AIzaSy...',
   },
   groq: {
     name: 'Groq (Whisper Large Audio Transcription)',
-    connected: false,
     description: 'Speech to text — ultra-fast Whisper Large v3 audio transcription engine.',
-    pricing_hint: 'About $0.04 per audio hour · free tier available',
+    pricing_hint: 'Free tier available · ~10x faster than real-time',
     get_key_url: 'https://console.groq.com/keys',
+    placeholder: 'gsk_...',
   },
   rapidapi: {
     name: 'RapidAPI (Instagram Downloader)',
-    connected: false,
     description: 'Direct Instagram Reel and Carousel downloader fallback API.',
     pricing_hint: 'Optional · falls back to Cobalt and yt-dlp if blank',
     get_key_url: 'https://rapidapi.com',
+    placeholder: 'Optional RapidAPI Key',
   },
   cobalt: {
     name: 'Cobalt API',
-    connected: false,
-    description: 'Self-hosted or public Cobalt video download API instance (co.wuk.sh).',
-    pricing_hint: 'Free & open-source community instances',
+    description: 'Self-hosted or public Cobalt video download API instance.',
+    pricing_hint: 'Default: https://co.wuk.sh',
     get_key_url: 'https://github.com/imputnet/cobalt',
+    placeholder: 'https://co.wuk.sh',
   },
 };
 
+function maskKey(key) {
+  if (!key || key.length < 8) return null;
+  return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
 export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
-  const [keysData, setKeysData] = useState(DEFAULT_SERVICES);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState(null);
+  const [storedKeys, setStoredKeys] = useState({});
   const [inputs, setInputs] = useState({});
-  const [actionState, setActionState] = useState({}); // { [service]: { saving, testing, removing, message, success } }
+  const [actionState, setActionState] = useState({}); // { [service]: { saving, testing, message, success } }
 
   useEffect(() => {
     if (isOpen) {
-      loadKeys();
+      loadLocalKeys();
     }
   }, [isOpen]);
 
-  const loadKeys = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const data = await api.getKeysStatus();
-      if (data && typeof data === 'object') {
-        setKeysData((prev) => ({ ...prev, ...data }));
-      }
-    } catch (err) {
-      console.error('Failed to load keys from backend:', err);
-      const backendUrl = import.meta.env.VITE_API_BASE_URL;
-      if (!backendUrl) {
-        setLoadError(
-          'Backend API URL (VITE_API_BASE_URL) is not configured in Vercel. Set VITE_API_BASE_URL in Vercel project settings to your Render backend URL.'
-        );
-      } else {
-        setLoadError(
-          `Could not connect to backend at ${backendUrl}. The backend service might still be booting up.`
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
+  const loadLocalKeys = () => {
+    const keys = keyStorage.getAllKeys();
+    setStoredKeys(keys);
   };
 
   const setStatus = (service, stateObj) => {
@@ -78,42 +61,44 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
     }));
   };
 
-  const handleSave = async (service) => {
+  const handleSave = (service) => {
     const val = inputs[service];
     if (!val || !val.trim()) return;
 
-    setStatus(service, { saving: true, message: null });
-    try {
-      await api.saveKey(service, val.trim());
-      setStatus(service, {
-        saving: false,
-        success: true,
-        message: 'Key saved and activated in database!',
-      });
-      setInputs((prev) => ({ ...prev, [service]: '' }));
-      await loadKeys();
-      if (onKeysUpdated) onKeysUpdated();
-    } catch (err) {
-      setStatus(service, {
-        saving: false,
-        success: false,
-        message: err.response?.data?.detail || err.message,
-      });
-    }
+    keyStorage.setKey(service, val.trim());
+    loadLocalKeys();
+    setInputs((prev) => ({ ...prev, [service]: '' }));
+    setStatus(service, {
+      saving: false,
+      success: true,
+      message: 'Saved to your browser storage (private to you)!',
+    });
+    if (onKeysUpdated) onKeysUpdated();
   };
 
   const handleTest = async (service) => {
-    const val = inputs[service];
+    const keyToTest = (inputs[service] && inputs[service].trim()) || storedKeys[service];
+    if (!keyToTest) {
+      setStatus(service, {
+        testing: false,
+        success: false,
+        message: 'Please paste a key to test.',
+      });
+      return;
+    }
+
     setStatus(service, { testing: true, message: null });
     try {
-      const res = await api.testKey(service, val ? val.trim() : null);
+      const res = await api.testKey(service, keyToTest);
       setStatus(service, {
         testing: false,
         success: res.success,
         message: res.message,
       });
-      if (res.success && val) {
-        await loadKeys();
+      if (res.success && inputs[service]) {
+        keyStorage.setKey(service, inputs[service].trim());
+        loadLocalKeys();
+        setInputs((prev) => ({ ...prev, [service]: '' }));
         if (onKeysUpdated) onKeysUpdated();
       }
     } catch (err) {
@@ -125,25 +110,14 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
     }
   };
 
-  const handleRemove = async (service) => {
-    setStatus(service, { removing: true, message: null });
-    try {
-      await api.removeKey(service);
-      setStatus(service, {
-        removing: false,
-        success: true,
-        message: 'Key removed.',
-      });
-      setInputs((prev) => ({ ...prev, [service]: '' }));
-      await loadKeys();
-      if (onKeysUpdated) onKeysUpdated();
-    } catch (err) {
-      setStatus(service, {
-        removing: false,
-        success: false,
-        message: err.message,
-      });
-    }
+  const handleRemove = (service) => {
+    keyStorage.removeKey(service);
+    loadLocalKeys();
+    setStatus(service, {
+      success: true,
+      message: 'Key removed from your browser.',
+    });
+    if (onKeysUpdated) onKeysUpdated();
   };
 
   if (!isOpen) return null;
@@ -160,49 +134,38 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
               <Key className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base font-bold text-white">API Keys & Integrations</h2>
-                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
-              </div>
-              <p className="text-xs text-slate-400">Configure AI models, speech-to-text, and download providers</p>
+              <h2 className="text-base font-bold text-white">Your Personal API Keys (BYOK)</h2>
+              <p className="text-xs text-slate-400">Stored locally in your own browser — never shared with other team members</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={loadKeys}
-              title="Refresh connection status"
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Backend Warning Banner if unreachable */}
-        {loadError && (
-          <div className="mx-6 mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start space-x-2.5">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="flex-1 space-y-1">
-              <p className="font-semibold">Backend Connection Notice</p>
-              <p className="text-[11px] text-amber-200/80">{loadError}</p>
-            </div>
-          </div>
-        )}
+        {/* Privacy Info Banner */}
+        <div className="mx-6 mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center space-x-2.5">
+          <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-[11px] text-emerald-200">
+            <strong>Private & Client-Side:</strong> Keys entered here are saved exclusively in your browser and sent securely per request. Each team member uses their own free API keys.
+          </span>
+        </div>
 
         {/* Body: Providers list */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 divide-y divide-slate-800/80">
           {servicesList.map((serviceKey) => {
-            const item = keysData[serviceKey] || DEFAULT_SERVICES[serviceKey];
-            if (!item) return null;
-
+            const item = SERVICES[serviceKey];
+            const currentKey = storedKeys[serviceKey];
+            const isConnected = bool(currentKey);
             const state = actionState[serviceKey] || {};
             const inputValue = inputs[serviceKey] || '';
+
+            function bool(val) {
+              return Boolean(val && val.length > 5);
+            }
 
             return (
               <div key={serviceKey} className="pt-6 first:pt-0 space-y-3">
@@ -212,14 +175,14 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                     <span className="font-bold text-sm text-white">{item.name}</span>
 
                     {/* Status Pill Badge */}
-                    {item.connected ? (
+                    {isConnected ? (
                       <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        <span>connected · {item.masked_key}</span>
+                        <span>configured · {maskKey(currentKey) || 'active'}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                        not connected
+                        not configured
                       </span>
                     )}
                   </div>
@@ -248,9 +211,9 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                     type={serviceKey === 'cobalt' ? 'text' : 'password'}
                     autoComplete="off"
                     placeholder={
-                      item.connected
-                        ? 'replace the key'
-                        : 'paste your key'
+                      isConnected
+                        ? 'replace your key'
+                        : item.placeholder || 'paste your key'
                     }
                     value={inputValue}
                     onChange={(e) =>
@@ -265,20 +228,16 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleSave(serviceKey)}
-                      disabled={state.saving || !inputValue.trim()}
+                      disabled={!inputValue.trim()}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
                     >
-                      {state.saving ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
+                      <Check className="w-3.5 h-3.5" />
                       <span>Save</span>
                     </button>
 
                     <button
                       onClick={() => handleTest(serviceKey)}
-                      disabled={state.testing || (!inputValue.trim() && !item.connected)}
+                      disabled={state.testing || (!inputValue.trim() && !isConnected)}
                       className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-xl text-xs font-medium transition border border-slate-700 flex items-center space-x-1.5"
                     >
                       {state.testing ? (
@@ -288,18 +247,13 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                       )}
                     </button>
 
-                    {item.connected && (
+                    {isConnected && (
                       <button
                         onClick={() => handleRemove(serviceKey)}
-                        disabled={state.removing}
-                        title="Remove key"
+                        title="Remove key from browser"
                         className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-medium transition border border-red-500/20"
                       >
-                        {state.removing ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

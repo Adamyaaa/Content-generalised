@@ -18,7 +18,13 @@ class IngestionService:
         self.storage_dir = Path(settings.STORAGE_DIR) / "processed"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    async def ingest_url(self, url: str, session_id: Optional[str] = None) -> Tuple[str, Optional[str]]:
+    async def ingest_url(
+        self,
+        url: str,
+        session_id: Optional[str] = None,
+        rapidapi_key: Optional[str] = None,
+        cobalt_url: Optional[str] = None,
+    ) -> Tuple[str, Optional[str]]:
         """
         Multi-layer ingestion waterfall:
         - Layer 0: LinkedIn Photo/Text Post Fallback (Twitterbot/1.0 -> 5s silent MP4 + transcript_override.txt)
@@ -33,6 +39,9 @@ class IngestionService:
         work_dir = self.storage_dir / session_id
         work_dir.mkdir(parents=True, exist_ok=True)
 
+        active_rapidapi_key = rapidapi_key or settings.RAPIDAPI_KEY
+        active_cobalt_url = cobalt_url or settings.COBALT_API_URL
+
         # Layer 0: LinkedIn Photo/Text Post Fallback
         if "linkedin.com" in url.lower():
             logger.info("Detected LinkedIn URL. Attempting Layer 0 Twitterbot OpenGraph bypass...")
@@ -45,20 +54,20 @@ class IngestionService:
                 logger.warning(f"Layer 0 LinkedIn bypass failed or post is a native video: {e}. Falling through to video waterfall.")
 
         # Layer 1: Instagram RapidAPI (if key provided)
-        if "instagram.com" in url.lower() and settings.RAPIDAPI_KEY:
+        if "instagram.com" in url.lower() and active_rapidapi_key:
             logger.info("Attempting Layer 1 Instagram RapidAPI...")
             try:
-                video_path = await self._instagram_rapidapi(url, work_dir)
+                video_path = await self._instagram_rapidapi(url, work_dir, active_rapidapi_key)
                 if video_path and os.path.exists(video_path):
                     return video_path, None
             except Exception as e:
                 logger.warning(f"Layer 1 RapidAPI failed: {e}. Falling through.")
 
         # Layer 2: Cobalt API
-        if settings.COBALT_API_URL:
+        if active_cobalt_url:
             logger.info("Attempting Layer 2 Cobalt API...")
             try:
-                video_path = await self._cobalt_download(url, work_dir)
+                video_path = await self._cobalt_download(url, work_dir, active_cobalt_url)
                 if video_path and os.path.exists(video_path):
                     return video_path, None
             except Exception as e:
@@ -137,10 +146,10 @@ class IngestionService:
 
         return str(video_path), str(transcript_override_path)
 
-    async def _instagram_rapidapi(self, url: str, work_dir: Path) -> Optional[str]:
+    async def _instagram_rapidapi(self, url: str, work_dir: Path, rapidapi_key: str) -> Optional[str]:
         """Layer 1: Instagram RapidAPI."""
         headers = {
-            "x-rapidapi-key": settings.RAPIDAPI_KEY,
+            "x-rapidapi-key": rapidapi_key,
             "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -161,9 +170,9 @@ class IngestionService:
                     return str(video_path)
         return None
 
-    async def _cobalt_download(self, url: str, work_dir: Path) -> Optional[str]:
+    async def _cobalt_download(self, url: str, work_dir: Path, cobalt_url: str) -> Optional[str]:
         """Layer 2: Cobalt API."""
-        endpoint = f"{settings.COBALT_API_URL.rstrip('/')}/api/json"
+        endpoint = f"{cobalt_url.rstrip('/')}/api/json"
         payload = {
             "url": url,
             "vQuality": "720",

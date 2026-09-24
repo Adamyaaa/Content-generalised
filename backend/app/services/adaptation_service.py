@@ -40,21 +40,18 @@ class AdaptationService:
         queue_id: str,
         analysis: ContentAnalysis,
         profile: CompanyProfile,
-        revision_critique: Optional[str] = None
+        revision_critique: Optional[str] = None,
+        gemini_key: Optional[str] = None,
     ) -> ContentConcept:
-        """
-        Dynamically pivots the underlying viral mechanism into an original,
-        high-conversion content concept tailored to the client profile.
-        Generates LinkedIn, Instagram Reel, and WhatsApp in a single structured LLM pass.
-        """
-        if not settings.GEMINI_API_KEY:
-            logger.warning("No GEMINI_API_KEY. Generating template adapted concept.")
+        active_key = gemini_key or settings.GEMINI_API_KEY
+        if not active_key:
+            logger.warning("No Gemini API key available. Generating template adapted concept.")
             return self._heuristic_concept(queue_id, analysis, profile)
 
         import asyncio
 
         def _run_adaptation():
-            genai.configure(api_key=settings.GEMINI_API_KEY)
+            genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
                 model_name=settings.GEMINI_MODEL,
                 generation_config={

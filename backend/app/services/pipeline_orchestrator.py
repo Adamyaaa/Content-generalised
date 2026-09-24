@@ -17,9 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 class PipelineOrchestrator:
-    async def process_queue_item(self, queue_id: str):
+    async def process_queue_item(
+        self,
+        queue_id: str,
+        gemini_key: Optional[str] = None,
+        groq_key: Optional[str] = None,
+        rapidapi_key: Optional[str] = None,
+        cobalt_url: Optional[str] = None,
+    ):
         """
-        Full autonomous pipeline:
+        Full autonomous pipeline with user-specific BYOK keys:
         1. Ingest (LinkedIn Layer 0 Twitterbot bypass -> RapidAPI -> Cobalt -> yt-dlp -> File Upload)
         2. Media extraction (FFmpeg -q:a 4 audio & 5-7 evenly spaced frames)
         3. Two-layer transcription (transcript_override -> Groq Whisper -> Gemini multimodal audio)
@@ -43,7 +50,10 @@ class PipelineOrchestrator:
 
             if queue_item.source_type == "url":
                 video_path, transcript_override_path = await ingestion_service.ingest_url(
-                    queue_item.source_url, session_id=queue_id
+                    queue_item.source_url,
+                    session_id=queue_id,
+                    rapidapi_key=rapidapi_key,
+                    cobalt_url=cobalt_url,
                 )
             else:
                 video_path = queue_item.file_path
@@ -66,7 +76,12 @@ class PipelineOrchestrator:
 
             # 3. Transcription & Reverse-Engineering
             db.update_queue_status(queue_id, QueueStatus.ANALYZING, "Transcribing and reverse-engineering viral psychology...")
-            transcript = await transcription_service.transcribe(audio_path, transcript_override_path)
+            transcript = await transcription_service.transcribe(
+                audio_path,
+                transcript_override_path,
+                groq_key=groq_key,
+                gemini_key=gemini_key,
+            )
 
             # Generate static web URLs for video and extracted frames
             try:
@@ -90,7 +105,8 @@ class PipelineOrchestrator:
                 frame_paths=frame_paths,
                 duration_seconds=duration_seconds,
                 video_url=video_web_url,
-                frame_urls=frame_web_urls
+                frame_urls=frame_web_urls,
+                gemini_key=gemini_key,
             )
             db.create_analysis(analysis)
 
@@ -105,19 +121,28 @@ class PipelineOrchestrator:
                 raise RuntimeError(f"No company profile found for client_id {queue_item.client_id}")
 
             # 5. Brand Adaptation
-            concept = await adaptation_service.adapt_concept(queue_id, analysis, profile)
+            concept = await adaptation_service.adapt_concept(
+                queue_id,
+                analysis,
+                profile,
+                gemini_key=gemini_key,
+            )
 
             # 6. Brand QA Evaluation
             db.update_queue_status(queue_id, QueueStatus.EVALUATING, "Running Brand QA Evaluator...")
-            qa = await qa_evaluator.evaluate(concept, profile)
+            qa = await qa_evaluator.evaluate(concept, profile, gemini_key=gemini_key)
 
             # If score < 80, regenerate once with critique feedback
             if not qa.passed or qa.total_score < 80:
                 logger.warning(f"QA score {qa.total_score} < 80. Triggering single revision pass with critique...")
                 concept = await adaptation_service.adapt_concept(
-                    queue_id, analysis, profile, revision_critique=qa.feedback
+                    queue_id,
+                    analysis,
+                    profile,
+                    revision_critique=qa.feedback,
+                    gemini_key=gemini_key,
                 )
-                qa = await qa_evaluator.evaluate(concept, profile)
+                qa = await qa_evaluator.evaluate(concept, profile, gemini_key=gemini_key)
 
             concept.qa_evaluation = qa
             db.create_concept(concept)

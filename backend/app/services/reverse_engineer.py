@@ -24,25 +24,18 @@ class ReverseEngineeringEngine:
         frame_paths: List[str],
         duration_seconds: Optional[float] = None,
         video_url: Optional[str] = None,
-        frame_urls: Optional[List[str]] = None
+        frame_urls: Optional[List[str]] = None,
+        gemini_key: Optional[str] = None,
     ) -> ContentAnalysis:
-        """
-        Reverse-engineer viral psychology using Gemini Flash with inline PIL Image frames:
-        - Hook trigger (Curiosity gap, Contrarian take, Pattern interrupt, Pain amplifier)
-        - Pacing (rapid cuts, slow tension-building)
-        - Narrative structure (Problem -> Agitation -> Insight -> Solution -> CTA)
-        - Visual storytelling (Framing, on-screen text density, b-roll dynamics)
-        - Observable claims stated in video
-        - Abstract, repeatable psychological formula
-        """
-        if not settings.GEMINI_API_KEY:
-            logger.warning("No GEMINI_API_KEY found. Generating high-fidelity heuristic analysis.")
+        active_key = gemini_key or settings.GEMINI_API_KEY
+        if not active_key:
+            logger.warning("No Gemini API key available. Generating high-fidelity heuristic analysis.")
             return self._heuristic_fallback(queue_id, source_url_or_file, transcript, duration_seconds, video_url, frame_urls)
 
         import asyncio
 
         def _run_analysis():
-            genai.configure(api_key=settings.GEMINI_API_KEY)
+            genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
                 model_name=settings.GEMINI_MODEL,
                 generation_config={

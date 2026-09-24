@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Header
 
 from app.core.config import settings
 from app.core.database import db
@@ -19,7 +19,14 @@ class IngestUrlRequest(BaseModel):
 
 
 @router.post("/url")
-async def ingest_url(payload: IngestUrlRequest, background_tasks: BackgroundTasks):
+async def ingest_url(
+    payload: IngestUrlRequest,
+    background_tasks: BackgroundTasks,
+    x_gemini_key: Optional[str] = Header(None),
+    x_groq_key: Optional[str] = Header(None),
+    x_rapidapi_key: Optional[str] = Header(None),
+    x_cobalt_url: Optional[str] = Header(None),
+):
     profile = db.get_profile(payload.client_id)
     if not profile:
         raise HTTPException(status_code=400, detail="Invalid client_id. Company profile does not exist.")
@@ -35,8 +42,15 @@ async def ingest_url(payload: IngestUrlRequest, background_tasks: BackgroundTask
     )
     db.create_queue_item(item)
 
-    # Launch autonomous pipeline worker in background
-    background_tasks.add_task(pipeline_orchestrator.process_queue_item, queue_id)
+    # Launch autonomous pipeline worker in background with user-specific keys
+    background_tasks.add_task(
+        pipeline_orchestrator.process_queue_item,
+        queue_id=queue_id,
+        gemini_key=x_gemini_key,
+        groq_key=x_groq_key,
+        rapidapi_key=x_rapidapi_key,
+        cobalt_url=x_cobalt_url,
+    )
 
     return {
         "status": "enqueued",
@@ -49,7 +63,11 @@ async def ingest_url(payload: IngestUrlRequest, background_tasks: BackgroundTask
 async def ingest_file(
     background_tasks: BackgroundTasks,
     client_id: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    x_gemini_key: Optional[str] = Header(None),
+    x_groq_key: Optional[str] = Header(None),
+    x_rapidapi_key: Optional[str] = Header(None),
+    x_cobalt_url: Optional[str] = Header(None),
 ):
     profile = db.get_profile(client_id)
     if not profile:
@@ -75,7 +93,14 @@ async def ingest_file(
     )
     db.create_queue_item(item)
 
-    background_tasks.add_task(pipeline_orchestrator.process_queue_item, queue_id)
+    background_tasks.add_task(
+        pipeline_orchestrator.process_queue_item,
+        queue_id=queue_id,
+        gemini_key=x_gemini_key,
+        groq_key=x_groq_key,
+        rapidapi_key=x_rapidapi_key,
+        cobalt_url=x_cobalt_url,
+    )
 
     return {
         "status": "enqueued",
@@ -103,10 +128,12 @@ async def get_queue_status(queue_id: str):
     return {
         "id": item.id,
         "client_id": item.client_id,
-        "status": item.status,
+        "source_type": item.source_type,
+        "source_url": item.source_url,
+        "status": item.status.value,
         "progress_message": item.progress_message,
         "error_message": item.error_message,
-        "concept_id": concept_id,
         "created_at": item.created_at,
-        "updated_at": item.updated_at
+        "updated_at": item.updated_at,
+        "concept_id": concept_id
     }
