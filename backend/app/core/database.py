@@ -2,6 +2,7 @@ import json
 import logging
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -16,37 +17,181 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = Path(settings.STORAGE_DIR) / "content_generalised.db"
 
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
+
+def _clean_json_field(val: Any) -> Any:
+    """Helper to deserialize stringified JSON safely."""
+    if val is None:
+        return None
+    if isinstance(val, (dict, list)):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except Exception:
+            return val
+    return val
+
 
 class Database:
     def __init__(self):
-        self.use_supabase = bool(settings.SUPABASE_URL and settings.SUPABASE_KEY)
+        self.use_postgres = False
+        self.use_supabase = False
         self.supabase = None
-        if self.use_supabase:
+        self.database_url = settings.DATABASE_URL.strip() if settings.DATABASE_URL else ""
+
+        # Priority 1: PostgreSQL / Neon if DATABASE_URL is set
+        if self.database_url:
+            if not PSYCOPG2_AVAILABLE:
+                logger.warning("DATABASE_URL provided but psycopg2-binary is not installed. Falling back.")
+            else:
+                # Normalize postgres:// to postgresql://
+                if self.database_url.startswith("postgres://"):
+                    self.database_url = "postgresql://" + self.database_url[len("postgres://"):]
+                
+                # Neon & cloud providers require SSL mode
+                if "sslmode=" not in self.database_url and ("neon.tech" in self.database_url or "supabase.co" in self.database_url):
+                    sep = "&" if "?" in self.database_url else "?"
+                    self.database_url = f"{self.database_url}{sep}sslmode=require"
+
+                try:
+                    # Test connection
+                    with psycopg2.connect(self.database_url) as test_conn:
+                        with test_conn.cursor() as cursor:
+                            cursor.execute("SELECT 1")
+                    self.use_postgres = True
+                    logger.info("Connected successfully to PostgreSQL / Neon database.")
+                except Exception as e:
+                    logger.warning(f"Failed to connect to PostgreSQL at DATABASE_URL ({e}). Falling back to Supabase/SQLite.")
+                    self.use_postgres = False
+
+        # Priority 2: Supabase REST API if configured and Postgres is not active
+        if not self.use_postgres and settings.SUPABASE_URL and settings.SUPABASE_KEY:
             try:
                 from supabase import create_client
                 self.supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-                logger.info("Connected to Supabase PostgreSQL database.")
+                self.use_supabase = True
+                logger.info("Connected to Supabase REST API.")
             except Exception as e:
                 logger.warning(f"Failed to initialize Supabase ({e}). Falling back to local SQLite.")
                 self.use_supabase = False
 
-    def init_db(self):
-        """Initialize database tables and seed default profiles if empty."""
-        if not self.use_supabase:
-            self._init_sqlite()
-        self._seed_default_profiles()
+        if not self.use_postgres and not self.use_supabase:
+            logger.info("Using local SQLite database at: %s", DB_PATH)
+
+    @contextmanager
+    def _get_postgres_conn(self):
+        """Yield a fresh Postgres connection with RealDictCursor."""
+        conn = psycopg2.connect(self.database_url, cursor_factory=RealDictCursor)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _get_sqlite_conn(self):
         conn = sqlite3.connect(str(DB_PATH))
         conn.row_factory = sqlite3.Row
         return conn
 
+    def init_db(self):
+        """Initialize database tables and seed default profiles if empty."""
+        if self.use_postgres:
+            self._init_postgres()
+        elif not self.use_supabase:
+            self._init_sqlite()
+        self._seed_default_profiles()
+
+    def _init_postgres(self):
+        with self._get_postgres_conn() as conn:
+            with conn.cursor() as cursor:
+                # 1. company_profiles
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS company_profiles (
+                        client_id TEXT PRIMARY KEY,
+                        company_name TEXT NOT NULL,
+                        industry TEXT NOT NULL,
+                        tagline_or_mission TEXT NOT NULL,
+                        products_and_services TEXT NOT NULL,
+                        target_audience TEXT NOT NULL,
+                        brand_voice_guidelines TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                """)
+
+                # 2. trend_queue
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS trend_queue (
+                        id TEXT PRIMARY KEY,
+                        client_id TEXT NOT NULL,
+                        source_type TEXT NOT NULL,
+                        source_url TEXT,
+                        file_path TEXT,
+                        status TEXT NOT NULL,
+                        progress_message TEXT NOT NULL,
+                        error_message TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY (client_id) REFERENCES company_profiles(client_id) ON DELETE CASCADE
+                    );
+                """)
+
+                # 3. content_analysis
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS content_analysis (
+                        id TEXT PRIMARY KEY,
+                        queue_id TEXT NOT NULL,
+                        source_url_or_file TEXT NOT NULL,
+                        duration_seconds REAL,
+                        video_url TEXT,
+                        frame_urls TEXT,
+                        observable_claims TEXT,
+                        transcript TEXT NOT NULL,
+                        hook_analysis TEXT NOT NULL,
+                        narrative_structure TEXT NOT NULL,
+                        visual_storytelling TEXT NOT NULL,
+                        psychological_formula TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE
+                    );
+                """)
+                for col in ["video_url TEXT", "frame_urls TEXT", "observable_claims TEXT"]:
+                    try:
+                        cursor.execute(f"ALTER TABLE content_analysis ADD COLUMN IF NOT EXISTS {col};")
+                    except Exception:
+                        pass
+
+                # 4. content_concepts
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS content_concepts (
+                        id TEXT PRIMARY KEY,
+                        queue_id TEXT NOT NULL,
+                        client_id TEXT NOT NULL,
+                        client_name TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        target_platform TEXT NOT NULL,
+                        scenes TEXT NOT NULL,
+                        platform_ideations TEXT NOT NULL,
+                        qa_evaluation TEXT NOT NULL,
+                        source_formula TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE,
+                        FOREIGN KEY (client_id) REFERENCES company_profiles(client_id) ON DELETE CASCADE
+                    );
+                """)
+                conn.commit()
+                logger.info("PostgreSQL / Neon database schema verified.")
+
     def _init_sqlite(self):
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         with self._get_sqlite_conn() as conn:
             cursor = conn.cursor()
             
-            # 1. company_profiles
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS company_profiles (
                     client_id TEXT PRIMARY KEY,
@@ -60,7 +205,6 @@ class Database:
                 );
             """)
 
-            # 2. trend_queue
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS trend_queue (
                     id TEXT PRIMARY KEY,
@@ -77,7 +221,6 @@ class Database:
                 );
             """)
 
-            # 3. content_analysis
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS content_analysis (
                     id TEXT PRIMARY KEY,
@@ -96,14 +239,12 @@ class Database:
                     FOREIGN KEY (queue_id) REFERENCES trend_queue(id) ON DELETE CASCADE
                 );
             """)
-            # Migration safety for existing SQLite tables
             for col in ["video_url TEXT", "frame_urls TEXT", "observable_claims TEXT"]:
                 try:
                     cursor.execute(f"ALTER TABLE content_analysis ADD COLUMN {col};")
                 except Exception:
                     pass
 
-            # 4. content_concepts
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS content_concepts (
                     id TEXT PRIMARY KEY,
@@ -220,7 +361,24 @@ class Database:
 
     # ================= COMPANY PROFILES =================
     def get_profiles(self) -> List[CompanyProfile]:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM company_profiles ORDER BY created_at ASC")
+                    rows = cursor.fetchall()
+                    profiles = []
+                    for row in rows:
+                        profiles.append(CompanyProfile(
+                            client_id=row["client_id"],
+                            company_name=row["company_name"],
+                            industry=row["industry"],
+                            tagline_or_mission=row["tagline_or_mission"],
+                            products_and_services=_clean_json_field(row["products_and_services"]),
+                            target_audience=_clean_json_field(row["target_audience"]),
+                            brand_voice_guidelines=_clean_json_field(row["brand_voice_guidelines"])
+                        ))
+                    return profiles
+        elif self.use_supabase:
             res = self.supabase.table("company_profiles").select("*").execute()
             profiles = []
             for row in res.data:
@@ -229,9 +387,9 @@ class Database:
                     company_name=row["company_name"],
                     industry=row["industry"],
                     tagline_or_mission=row["tagline_or_mission"],
-                    products_and_services=json.loads(row["products_and_services"]) if isinstance(row["products_and_services"], str) else row["products_and_services"],
-                    target_audience=json.loads(row["target_audience"]) if isinstance(row["target_audience"], str) else row["target_audience"],
-                    brand_voice_guidelines=json.loads(row["brand_voice_guidelines"]) if isinstance(row["brand_voice_guidelines"], str) else row["brand_voice_guidelines"]
+                    products_and_services=_clean_json_field(row["products_and_services"]),
+                    target_audience=_clean_json_field(row["target_audience"]),
+                    brand_voice_guidelines=_clean_json_field(row["brand_voice_guidelines"])
                 ))
             return profiles
         else:
@@ -246,9 +404,9 @@ class Database:
                         company_name=row["company_name"],
                         industry=row["industry"],
                         tagline_or_mission=row["tagline_or_mission"],
-                        products_and_services=json.loads(row["products_and_services"]),
-                        target_audience=json.loads(row["target_audience"]),
-                        brand_voice_guidelines=json.loads(row["brand_voice_guidelines"])
+                        products_and_services=_clean_json_field(row["products_and_services"]),
+                        target_audience=_clean_json_field(row["target_audience"]),
+                        brand_voice_guidelines=_clean_json_field(row["brand_voice_guidelines"])
                     ))
                 return profiles
 
@@ -261,7 +419,32 @@ class Database:
 
     def create_profile(self, profile: CompanyProfile) -> CompanyProfile:
         now = datetime.now(timezone.utc).isoformat()
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO company_profiles 
+                        (client_id, company_name, industry, tagline_or_mission, products_and_services, target_audience, brand_voice_guidelines, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (client_id) DO UPDATE SET
+                            company_name = EXCLUDED.company_name,
+                            industry = EXCLUDED.industry,
+                            tagline_or_mission = EXCLUDED.tagline_or_mission,
+                            products_and_services = EXCLUDED.products_and_services,
+                            target_audience = EXCLUDED.target_audience,
+                            brand_voice_guidelines = EXCLUDED.brand_voice_guidelines;
+                    """, (
+                        profile.client_id,
+                        profile.company_name,
+                        profile.industry,
+                        profile.tagline_or_mission,
+                        json.dumps([p.model_dump() for p in profile.products_and_services]),
+                        json.dumps(profile.target_audience.model_dump()),
+                        json.dumps(profile.brand_voice_guidelines.model_dump()),
+                        now
+                    ))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("company_profiles").insert({
                 "client_id": profile.client_id,
                 "company_name": profile.company_name,
@@ -297,7 +480,12 @@ class Database:
         return self.create_profile(profile)
 
     def delete_profile(self, client_id: str) -> bool:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM company_profiles WHERE client_id = %s", (client_id,))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("company_profiles").delete().eq("client_id", client_id).execute()
         else:
             with self._get_sqlite_conn() as conn:
@@ -311,7 +499,31 @@ class Database:
         now = datetime.now(timezone.utc).isoformat()
         item.created_at = now
         item.updated_at = now
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO trend_queue (id, client_id, source_type, source_url, file_path, status, progress_message, error_message, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            status = EXCLUDED.status,
+                            progress_message = EXCLUDED.progress_message,
+                            error_message = EXCLUDED.error_message,
+                            updated_at = EXCLUDED.updated_at;
+                    """, (
+                        item.id,
+                        item.client_id,
+                        item.source_type,
+                        item.source_url,
+                        item.file_path,
+                        item.status.value,
+                        item.progress_message,
+                        item.error_message,
+                        item.created_at,
+                        item.updated_at
+                    ))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("trend_queue").insert(item.model_dump()).execute()
         else:
             with self._get_sqlite_conn() as conn:
@@ -335,7 +547,26 @@ class Database:
         return item
 
     def get_queue_item(self, queue_id: str) -> Optional[TrendQueueItem]:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM trend_queue WHERE id = %s", (queue_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        return TrendQueueItem(
+                            id=row["id"],
+                            client_id=row["client_id"],
+                            source_type=row["source_type"],
+                            source_url=row["source_url"],
+                            file_path=row["file_path"],
+                            status=QueueStatus(row["status"]),
+                            progress_message=row["progress_message"],
+                            error_message=row["error_message"],
+                            created_at=str(row["created_at"]),
+                            updated_at=str(row["updated_at"])
+                        )
+                    return None
+        elif self.use_supabase:
             res = self.supabase.table("trend_queue").select("*").eq("id", queue_id).execute()
             if res.data:
                 return TrendQueueItem(**res.data[0])
@@ -368,7 +599,16 @@ class Database:
         error_message: Optional[str] = None
     ):
         now = datetime.now(timezone.utc).isoformat()
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE trend_queue
+                        SET status = %s, progress_message = %s, error_message = %s, updated_at = %s
+                        WHERE id = %s
+                    """, (status.value, progress_message, error_message, now, queue_id))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("trend_queue").update({
                 "status": status.value,
                 "progress_message": progress_message,
@@ -406,7 +646,31 @@ class Database:
             "psychological_formula": analysis.psychological_formula,
             "created_at": now
         }
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO content_analysis 
+                        (id, queue_id, source_url_or_file, duration_seconds, video_url, frame_urls, observable_claims, transcript, hook_analysis, narrative_structure, visual_storytelling, psychological_formula, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            duration_seconds = EXCLUDED.duration_seconds,
+                            video_url = EXCLUDED.video_url,
+                            frame_urls = EXCLUDED.frame_urls,
+                            observable_claims = EXCLUDED.observable_claims,
+                            transcript = EXCLUDED.transcript,
+                            hook_analysis = EXCLUDED.hook_analysis,
+                            narrative_structure = EXCLUDED.narrative_structure,
+                            visual_storytelling = EXCLUDED.visual_storytelling,
+                            psychological_formula = EXCLUDED.psychological_formula;
+                    """, (
+                        data["id"], data["queue_id"], data["source_url_or_file"], data["duration_seconds"],
+                        data["video_url"], data["frame_urls"], data["observable_claims"],
+                        data["transcript"], data["hook_analysis"], data["narrative_structure"],
+                        data["visual_storytelling"], data["psychological_formula"], data["created_at"]
+                    ))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("content_analysis").insert(data).execute()
         else:
             with self._get_sqlite_conn() as conn:
@@ -425,7 +689,30 @@ class Database:
         return analysis
 
     def get_analysis_by_queue(self, queue_id: str) -> Optional[ContentAnalysis]:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM content_analysis WHERE queue_id = %s", (queue_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        row_dict = dict(row)
+                        return ContentAnalysis(
+                            id=row_dict["id"],
+                            queue_id=row_dict["queue_id"],
+                            source_url_or_file=row_dict["source_url_or_file"],
+                            duration_seconds=row_dict["duration_seconds"],
+                            video_url=row_dict.get("video_url"),
+                            frame_urls=_clean_json_field(row_dict.get("frame_urls")) or [],
+                            observable_claims=_clean_json_field(row_dict.get("observable_claims")) or [],
+                            transcript=row_dict["transcript"],
+                            hook_analysis=_clean_json_field(row_dict["hook_analysis"]),
+                            narrative_structure=_clean_json_field(row_dict["narrative_structure"]),
+                            visual_storytelling=_clean_json_field(row_dict["visual_storytelling"]),
+                            psychological_formula=row_dict["psychological_formula"],
+                            created_at=str(row_dict["created_at"])
+                        )
+                    return None
+        elif self.use_supabase:
             res = self.supabase.table("content_analysis").select("*").eq("queue_id", queue_id).execute()
             if res.data:
                 row = res.data[0]
@@ -435,12 +722,12 @@ class Database:
                     source_url_or_file=row["source_url_or_file"],
                     duration_seconds=row["duration_seconds"],
                     video_url=row.get("video_url"),
-                    frame_urls=json.loads(row.get("frame_urls", "[]") or "[]") if isinstance(row.get("frame_urls"), str) else (row.get("frame_urls") or []),
-                    observable_claims=json.loads(row.get("observable_claims", "[]") or "[]") if isinstance(row.get("observable_claims"), str) else (row.get("observable_claims") or []),
+                    frame_urls=_clean_json_field(row.get("frame_urls")) or [],
+                    observable_claims=_clean_json_field(row.get("observable_claims")) or [],
                     transcript=row["transcript"],
-                    hook_analysis=json.loads(row["hook_analysis"]),
-                    narrative_structure=json.loads(row["narrative_structure"]),
-                    visual_storytelling=json.loads(row["visual_storytelling"]),
+                    hook_analysis=_clean_json_field(row["hook_analysis"]),
+                    narrative_structure=_clean_json_field(row["narrative_structure"]),
+                    visual_storytelling=_clean_json_field(row["visual_storytelling"]),
                     psychological_formula=row["psychological_formula"],
                     created_at=row["created_at"]
                 )
@@ -458,12 +745,12 @@ class Database:
                         source_url_or_file=row_dict["source_url_or_file"],
                         duration_seconds=row_dict["duration_seconds"],
                         video_url=row_dict.get("video_url"),
-                        frame_urls=json.loads(row_dict.get("frame_urls") or "[]"),
-                        observable_claims=json.loads(row_dict.get("observable_claims") or "[]"),
+                        frame_urls=_clean_json_field(row_dict.get("frame_urls")) or [],
+                        observable_claims=_clean_json_field(row_dict.get("observable_claims")) or [],
                         transcript=row_dict["transcript"],
-                        hook_analysis=json.loads(row_dict["hook_analysis"]),
-                        narrative_structure=json.loads(row_dict["narrative_structure"]),
-                        visual_storytelling=json.loads(row_dict["visual_storytelling"]),
+                        hook_analysis=_clean_json_field(row_dict["hook_analysis"]),
+                        narrative_structure=_clean_json_field(row_dict["narrative_structure"]),
+                        visual_storytelling=_clean_json_field(row_dict["visual_storytelling"]),
                         psychological_formula=row_dict["psychological_formula"],
                         created_at=row_dict["created_at"]
                     )
@@ -486,7 +773,29 @@ class Database:
             "source_formula": concept.source_formula,
             "created_at": now
         }
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO content_concepts 
+                        (id, queue_id, client_id, client_name, title, target_platform, scenes, platform_ideations, qa_evaluation, source_formula, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            client_id = EXCLUDED.client_id,
+                            client_name = EXCLUDED.client_name,
+                            title = EXCLUDED.title,
+                            target_platform = EXCLUDED.target_platform,
+                            scenes = EXCLUDED.scenes,
+                            platform_ideations = EXCLUDED.platform_ideations,
+                            qa_evaluation = EXCLUDED.qa_evaluation,
+                            source_formula = EXCLUDED.source_formula;
+                    """, (
+                        data["id"], data["queue_id"], data["client_id"], data["client_name"], data["title"],
+                        data["target_platform"], data["scenes"], data["platform_ideations"],
+                        data["qa_evaluation"], data["source_formula"], data["created_at"]
+                    ))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("content_concepts").insert(data).execute()
         else:
             with self._get_sqlite_conn() as conn:
@@ -504,7 +813,31 @@ class Database:
         return concept
 
     def get_concepts(self, client_id: Optional[str] = None) -> List[ContentConcept]:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    if client_id:
+                        cursor.execute("SELECT * FROM content_concepts WHERE client_id = %s ORDER BY created_at DESC", (client_id,))
+                    else:
+                        cursor.execute("SELECT * FROM content_concepts ORDER BY created_at DESC")
+                    rows = cursor.fetchall()
+                    concepts = []
+                    for row in rows:
+                        concepts.append(ContentConcept(
+                            id=row["id"],
+                            queue_id=row["queue_id"],
+                            client_id=row["client_id"],
+                            client_name=row["client_name"],
+                            title=row["title"],
+                            target_platform=row["target_platform"],
+                            scenes=_clean_json_field(row["scenes"]),
+                            platform_ideations=_clean_json_field(row["platform_ideations"]),
+                            qa_evaluation=_clean_json_field(row["qa_evaluation"]),
+                            source_formula=row["source_formula"],
+                            created_at=str(row["created_at"])
+                        ))
+                    return concepts
+        elif self.use_supabase:
             query = self.supabase.table("content_concepts").select("*").order("created_at", desc=True)
             if client_id:
                 query = query.eq("client_id", client_id)
@@ -518,9 +851,9 @@ class Database:
                     client_name=row["client_name"],
                     title=row["title"],
                     target_platform=row["target_platform"],
-                    scenes=json.loads(row["scenes"]),
-                    platform_ideations=json.loads(row["platform_ideations"]),
-                    qa_evaluation=json.loads(row["qa_evaluation"]),
+                    scenes=_clean_json_field(row["scenes"]),
+                    platform_ideations=_clean_json_field(row["platform_ideations"]),
+                    qa_evaluation=_clean_json_field(row["qa_evaluation"]),
                     source_formula=row["source_formula"],
                     created_at=row["created_at"]
                 ))
@@ -542,16 +875,36 @@ class Database:
                         client_name=row["client_name"],
                         title=row["title"],
                         target_platform=row["target_platform"],
-                        scenes=json.loads(row["scenes"]),
-                        platform_ideations=json.loads(row["platform_ideations"]),
-                        qa_evaluation=json.loads(row["qa_evaluation"]),
+                        scenes=_clean_json_field(row["scenes"]),
+                        platform_ideations=_clean_json_field(row["platform_ideations"]),
+                        qa_evaluation=_clean_json_field(row["qa_evaluation"]),
                         source_formula=row["source_formula"],
                         created_at=row["created_at"]
                     ))
                 return concepts
 
     def get_concept(self, concept_id: str) -> Optional[ContentConcept]:
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM content_concepts WHERE id = %s", (concept_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        return ContentConcept(
+                            id=row["id"],
+                            queue_id=row["queue_id"],
+                            client_id=row["client_id"],
+                            client_name=row["client_name"],
+                            title=row["title"],
+                            target_platform=row["target_platform"],
+                            scenes=_clean_json_field(row["scenes"]),
+                            platform_ideations=_clean_json_field(row["platform_ideations"]),
+                            qa_evaluation=_clean_json_field(row["qa_evaluation"]),
+                            source_formula=row["source_formula"],
+                            created_at=str(row["created_at"])
+                        )
+                    return None
+        elif self.use_supabase:
             res = self.supabase.table("content_concepts").select("*").eq("id", concept_id).execute()
             if res.data:
                 row = res.data[0]
@@ -562,9 +915,9 @@ class Database:
                     client_name=row["client_name"],
                     title=row["title"],
                     target_platform=row["target_platform"],
-                    scenes=json.loads(row["scenes"]),
-                    platform_ideations=json.loads(row["platform_ideations"]),
-                    qa_evaluation=json.loads(row["qa_evaluation"]),
+                    scenes=_clean_json_field(row["scenes"]),
+                    platform_ideations=_clean_json_field(row["platform_ideations"]),
+                    qa_evaluation=_clean_json_field(row["qa_evaluation"]),
                     source_formula=row["source_formula"],
                     created_at=row["created_at"]
                 )
@@ -582,9 +935,9 @@ class Database:
                         client_name=row["client_name"],
                         title=row["title"],
                         target_platform=row["target_platform"],
-                        scenes=json.loads(row["scenes"]),
-                        platform_ideations=json.loads(row["platform_ideations"]),
-                        qa_evaluation=json.loads(row["qa_evaluation"]),
+                        scenes=_clean_json_field(row["scenes"]),
+                        platform_ideations=_clean_json_field(row["platform_ideations"]),
+                        qa_evaluation=_clean_json_field(row["qa_evaluation"]),
                         source_formula=row["source_formula"],
                         created_at=row["created_at"]
                     )
@@ -598,7 +951,15 @@ class Database:
 
         queue_id = concept.queue_id
 
-        if self.use_supabase:
+        if self.use_postgres:
+            with self._get_postgres_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM content_concepts WHERE id = %s", (concept_id,))
+                    if queue_id:
+                        cursor.execute("DELETE FROM content_analysis WHERE queue_id = %s", (queue_id,))
+                        cursor.execute("DELETE FROM trend_queue WHERE id = %s", (queue_id,))
+                    conn.commit()
+        elif self.use_supabase:
             self.supabase.table("content_concepts").delete().eq("id", concept_id).execute()
             if queue_id:
                 self.supabase.table("content_analysis").delete().eq("queue_id", queue_id).execute()

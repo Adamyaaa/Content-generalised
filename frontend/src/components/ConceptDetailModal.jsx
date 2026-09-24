@@ -1,18 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  X,
-  Copy,
-  Check,
-  Share2,
-  MessageSquare,
-  Zap,
-  ShieldCheck,
-  Film,
-  Sparkles,
-  FileText,
-  AlertCircle
-} from 'lucide-react';
-import { api } from '../services/api';
+import { X, Film, Sparkles, MessageSquare, Video, Check, Copy, Share2, Layers, ShieldCheck, ChevronRight, HelpCircle, AlertCircle } from 'lucide-react';
+import { api, getMediaUrl } from '../services/api';
 
 export default function ConceptDetailModal({ conceptId, onClose }) {
   const [data, setData] = useState(null);
@@ -145,7 +133,7 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                       {analysis?.video_url ? (
                         <div className="w-full max-w-[280px] rounded-xl overflow-hidden shadow-2xl bg-black border border-slate-800 relative">
                           <video
-                            src={analysis.video_url}
+                            src={getMediaUrl(analysis.video_url)}
                             controls
                             className="w-full h-auto max-h-[420px] object-contain rounded-xl"
                           />
@@ -181,7 +169,7 @@ export default function ConceptDetailModal({ conceptId, onClose }) {
                                 className="group relative rounded-lg overflow-hidden border border-slate-800 hover:border-emerald-500/60 transition bg-slate-900 aspect-[9/16]"
                               >
                                 <img
-                                  src={frameUrl}
+                                  src={getMediaUrl(frameUrl)}
                                   alt={`Frame ${idx + 1}`}
                                   className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                                 />

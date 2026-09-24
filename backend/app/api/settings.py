@@ -85,6 +85,14 @@ async def get_keys_status():
             "description": "Cloud PostgreSQL database for storing brand profiles, queue state, and adapted concepts.",
             "pricing_hint": "Free tier available · defaults to SQLite if blank",
             "get_key_url": "https://supabase.com"
+        },
+        "neon": {
+            "name": "Neon (Serverless Postgres)",
+            "connected": bool(settings.DATABASE_URL and len(settings.DATABASE_URL) > 10),
+            "masked_key": mask_key(settings.DATABASE_URL),
+            "description": "Serverless PostgreSQL database. Paste your Neon pooled connection string (DATABASE_URL).",
+            "pricing_hint": "Free tier with 0.5 GB storage & instant branching",
+            "get_key_url": "https://console.neon.tech"
         }
     }
 
@@ -112,14 +120,19 @@ async def save_key(payload: SaveKeyRequest):
         update_env_file("SUPABASE_KEY", val)
         if payload.secondary_value:
             update_env_file("SUPABASE_URL", payload.secondary_value.strip())
+    elif service in ("neon", "postgres", "database_url"):
+        update_env_file("DATABASE_URL", val)
+        from app.core.database import db
+        db.__init__()
+        db.init_db()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown service: {service}")
 
     return {
         "status": "success",
         "service": service,
-        "masked_key": mask_key(val) if service != "cobalt" else val,
-        "message": f"Saved and activated API key for {service}."
+        "masked_key": mask_key(val) if service not in ("cobalt", "neon", "postgres", "database_url") else (mask_key(val) if "://" in val else val),
+        "message": f"Saved and activated configuration for {service}."
     }
 
 
@@ -188,6 +201,25 @@ async def test_key(payload: TestKeyRequest):
         except Exception as e:
             return {"success": False, "message": f"Supabase connection test failed: {e}"}
 
+    elif service in ("neon", "postgres", "database_url"):
+        url = test_key_val or settings.DATABASE_URL
+        if not url:
+            return {"success": False, "message": "No DATABASE_URL provided to test."}
+        try:
+            import psycopg2
+            url_to_test = url.strip()
+            if url_to_test.startswith("postgres://"):
+                url_to_test = "postgresql://" + url_to_test[len("postgres://"):]
+            if "sslmode=" not in url_to_test and ("neon.tech" in url_to_test or "supabase.co" in url_to_test):
+                sep = "&" if "?" in url_to_test else "?"
+                url_to_test = f"{url_to_test}{sep}sslmode=require"
+            with psycopg2.connect(url_to_test, connect_timeout=8) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            return {"success": True, "message": "Neon PostgreSQL connected successfully!"}
+        except Exception as e:
+            return {"success": False, "message": f"Neon connection test failed: {e}"}
+
     return {"success": True, "message": f"Configuration saved for {service}."}
 
 
@@ -204,6 +236,11 @@ async def remove_key(service: str):
         update_env_file("COBALT_API_URL", "https://co.wuk.sh")
     elif service == "supabase":
         update_env_file("SUPABASE_KEY", "")
+    elif service in ("neon", "postgres", "database_url"):
+        update_env_file("DATABASE_URL", "")
+        from app.core.database import db
+        db.__init__()
+        db.init_db()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown service: {service}")
 

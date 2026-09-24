@@ -105,7 +105,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
 
   if (!isOpen) return null;
 
-  const servicesList = ['gemini', 'groq', 'rapidapi', 'cobalt', 'supabase'];
+  const servicesList = ['gemini', 'groq', 'neon', 'supabase', 'rapidapi', 'cobalt'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
@@ -118,7 +118,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
             </div>
             <div>
               <h2 className="text-base font-bold text-white">API Keys & Integrations</h2>
-              <p className="text-xs text-slate-400">Configure AI models, speech-to-text, and download providers</p>
+              <p className="text-xs text-slate-400">Configure AI models, database, speech-to-text, and download providers</p>
             </div>
           </div>
           <button
@@ -172,7 +172,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                         rel="noreferrer"
                         className="text-xs text-slate-400 hover:text-emerald-400 flex items-center space-x-1 transition font-medium"
                       >
-                        <span>Get a key</span>
+                        <span>{serviceKey === 'neon' ? 'Open Neon Console' : 'Get a key'}</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
@@ -204,9 +204,15 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
                   {/* Input field row + Action buttons (matching screenshot UX) */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <input
-                      type="password"
+                      type={serviceKey === 'neon' || serviceKey === 'cobalt' ? 'text' : 'password'}
                       autoComplete="off"
-                      placeholder={item.connected ? 'replace the key' : 'paste your key'}
+                      placeholder={
+                        serviceKey === 'neon'
+                          ? 'postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require'
+                          : item.connected
+                          ? 'replace the key'
+                          : 'paste your key'
+                      }
                       value={inputValue}
                       onChange={(e) =>
                         setInputs({
