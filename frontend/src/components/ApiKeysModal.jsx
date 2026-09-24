@@ -1,10 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { X, Key, ExternalLink, Check, AlertCircle, Loader2, Trash2, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 
+const DEFAULT_SERVICES = {
+  gemini: {
+    name: 'Gemini (Multimodal Vision & Analysis)',
+    connected: false,
+    description: 'Multimodal visual reverse-engineering, narrative extraction & brand adaptation. Uses gemini-flash-lite-latest.',
+    pricing_hint: 'Has generous free tier (15 RPM)',
+    get_key_url: 'https://aistudio.google.com/app/apikey',
+  },
+  groq: {
+    name: 'Groq (Whisper Large Audio Transcription)',
+    connected: false,
+    description: 'Speech to text — ultra-fast Whisper Large v3 audio transcription engine.',
+    pricing_hint: 'About $0.04 per audio hour · free tier available',
+    get_key_url: 'https://console.groq.com/keys',
+  },
+  neon: {
+    name: 'Neon (Serverless Postgres)',
+    connected: false,
+    description: 'Serverless PostgreSQL database. Paste your Neon pooled connection string (DATABASE_URL).',
+    pricing_hint: 'Free tier with 0.5 GB storage & instant branching',
+    get_key_url: 'https://console.neon.tech',
+  },
+  supabase: {
+    name: 'Supabase (PostgreSQL Alternative)',
+    connected: false,
+    description: 'Cloud PostgreSQL database for storing brand profiles, queue state, and adapted concepts.',
+    pricing_hint: 'Free tier available · defaults to SQLite if blank',
+    get_key_url: 'https://supabase.com',
+  },
+  rapidapi: {
+    name: 'RapidAPI (Instagram Downloader)',
+    connected: false,
+    description: 'Direct Instagram Reel and Carousel downloader fallback API.',
+    pricing_hint: 'Optional · falls back to Cobalt and yt-dlp if blank',
+    get_key_url: 'https://rapidapi.com',
+  },
+  cobalt: {
+    name: 'Cobalt API',
+    connected: false,
+    description: 'Self-hosted or public Cobalt video download API instance (co.wuk.sh).',
+    pricing_hint: 'Free & open-source community instances',
+    get_key_url: 'https://github.com/imputnet/cobalt',
+  },
+};
+
 export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
-  const [keysData, setKeysData] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [keysData, setKeysData] = useState(DEFAULT_SERVICES);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [inputs, setInputs] = useState({});
   const [secondaryInputs, setSecondaryInputs] = useState({});
   const [actionState, setActionState] = useState({}); // { [service]: { saving, testing, removing, message, success } }
@@ -17,11 +63,24 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
 
   const loadKeys = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await api.getKeysStatus();
-      setKeysData(data);
+      if (data && typeof data === 'object') {
+        setKeysData((prev) => ({ ...prev, ...data }));
+      }
     } catch (err) {
-      console.error('Failed to load keys:', err);
+      console.error('Failed to load keys from backend:', err);
+      const backendUrl = import.meta.env.VITE_API_BASE_URL;
+      if (!backendUrl) {
+        setLoadError(
+          'Backend API URL (VITE_API_BASE_URL) is not configured in Vercel. Set VITE_API_BASE_URL in Vercel project settings to your Render backend URL.'
+        );
+      } else {
+        setLoadError(
+          `Could not connect to backend at ${backendUrl}. The backend service might still be booting up.`
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -45,7 +104,7 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
       setStatus(service, {
         saving: false,
         success: true,
-        message: 'Key saved and activated!',
+        message: 'Key saved and activated in database!',
       });
       setInputs((prev) => ({ ...prev, [service]: '' }));
       await loadKeys();
@@ -117,169 +176,187 @@ export default function ApiKeysModal({ isOpen, onClose, onKeysUpdated }) {
               <Key className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">API Keys & Integrations</h2>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-base font-bold text-white">API Keys & Integrations</h2>
+                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+              </div>
               <p className="text-xs text-slate-400">Configure AI models, database, speech-to-text, and download providers</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={loadKeys}
+              title="Refresh connection status"
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Backend Warning Banner if unreachable */}
+        {loadError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start space-x-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold">Backend Connection Notice</p>
+              <p className="text-[11px] text-amber-200/80">{loadError}</p>
+            </div>
+          </div>
+        )}
 
         {/* Body: Providers list */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 divide-y divide-slate-800/80">
-          {loading ? (
-            <div className="py-12 text-center text-xs text-slate-500 flex items-center justify-center space-x-2">
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-              <span>Loading provider configurations...</span>
-            </div>
-          ) : (
-            servicesList.map((serviceKey) => {
-              const item = keysData[serviceKey];
-              if (!item) return null;
+          {servicesList.map((serviceKey) => {
+            const item = keysData[serviceKey] || DEFAULT_SERVICES[serviceKey];
+            if (!item) return null;
 
-              const state = actionState[serviceKey] || {};
-              const inputValue = inputs[serviceKey] || '';
-              const secInputValue = secondaryInputs[serviceKey] || '';
+            const state = actionState[serviceKey] || {};
+            const inputValue = inputs[serviceKey] || '';
+            const secInputValue = secondaryInputs[serviceKey] || '';
 
-              return (
-                <div key={serviceKey} className="pt-6 first:pt-0 space-y-3">
-                  {/* Top Bar: Name + Connected Pill + Link */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2.5">
-                      <span className="font-bold text-sm text-white">{item.name}</span>
+            return (
+              <div key={serviceKey} className="pt-6 first:pt-0 space-y-3">
+                {/* Top Bar: Name + Connected Pill + Link */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="font-bold text-sm text-white">{item.name}</span>
 
-                      {/* Status Pill Badge */}
-                      {item.connected ? (
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <span>connected · {item.masked_key}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          not connected
-                        </span>
-                      )}
-                    </div>
-
-                    {item.get_key_url && (
-                      <a
-                        href={item.get_key_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-slate-400 hover:text-emerald-400 flex items-center space-x-1 transition font-medium"
-                      >
-                        <span>{serviceKey === 'neon' ? 'Open Neon Console' : 'Get a key'}</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                    {/* Status Pill Badge */}
+                    {item.connected ? (
+                      <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span>connected · {item.masked_key}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                        not connected
+                      </span>
                     )}
                   </div>
 
-                  {/* Subtitle / Description */}
-                  <p className="text-xs text-slate-400">
-                    {item.description} {item.pricing_hint && `· ${item.pricing_hint}`}
-                  </p>
-
-                  {/* Secondary input if Supabase (needs URL + Key) */}
-                  {serviceKey === 'supabase' && (
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="https://your-project.supabase.co"
-                        value={secInputValue}
-                        onChange={(e) =>
-                          setSecondaryInputs({
-                            ...secondaryInputs,
-                            [serviceKey]: e.target.value,
-                          })
-                        }
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 mb-2 font-mono"
-                      />
-                    </div>
+                  {item.get_key_url && (
+                    <a
+                      href={item.get_key_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-slate-400 hover:text-emerald-400 flex items-center space-x-1 transition font-medium"
+                    >
+                      <span>{serviceKey === 'neon' ? 'Open Neon Console' : 'Get a key'}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   )}
+                </div>
 
-                  {/* Input field row + Action buttons (matching screenshot UX) */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Subtitle / Description */}
+                <p className="text-xs text-slate-400">
+                  {item.description} {item.pricing_hint && `· ${item.pricing_hint}`}
+                </p>
+
+                {/* Secondary input if Supabase (needs URL + Key) */}
+                {serviceKey === 'supabase' && (
+                  <div>
                     <input
-                      type={serviceKey === 'neon' || serviceKey === 'cobalt' ? 'text' : 'password'}
-                      autoComplete="off"
-                      placeholder={
-                        serviceKey === 'neon'
-                          ? 'postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require'
-                          : item.connected
-                          ? 'replace the key'
-                          : 'paste your key'
-                      }
-                      value={inputValue}
+                      type="text"
+                      placeholder="https://your-project.supabase.co"
+                      value={secInputValue}
                       onChange={(e) =>
-                        setInputs({
-                          ...inputs,
+                        setSecondaryInputs({
+                          ...secondaryInputs,
                           [serviceKey]: e.target.value,
                         })
                       }
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono tracking-wide"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 mb-2 font-mono"
                     />
+                  </div>
+                )}
 
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleSave(serviceKey)}
-                        disabled={state.saving || !inputValue.trim()}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold border border-slate-700 hover:border-slate-600 transition disabled:opacity-40"
-                      >
-                        {state.saving ? 'Saving...' : 'Save'}
-                      </button>
+                {/* Input field row + Action buttons */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <input
+                    type={serviceKey === 'neon' || serviceKey === 'cobalt' ? 'text' : 'password'}
+                    autoComplete="off"
+                    placeholder={
+                      serviceKey === 'neon'
+                        ? 'postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require'
+                        : item.connected
+                        ? 'replace the key'
+                        : 'paste your key'
+                    }
+                    value={inputValue}
+                    onChange={(e) =>
+                      setInputs({
+                        ...inputs,
+                        [serviceKey]: e.target.value,
+                      })
+                    }
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono tracking-wide"
+                  />
 
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleSave(serviceKey)}
+                      disabled={state.saving || !inputValue.trim()}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+                    >
+                      {state.saving ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleTest(serviceKey)}
+                      disabled={state.testing || (!inputValue.trim() && !item.connected)}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-xl text-xs font-medium transition border border-slate-700 flex items-center space-x-1.5"
+                    >
+                      {state.testing ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                      ) : (
+                        <span>Test</span>
+                      )}
+                    </button>
+
+                    {item.connected && (
                       <button
-                        onClick={() => handleTest(serviceKey)}
-                        disabled={state.testing || (!item.connected && !inputValue.trim())}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold border border-slate-700 hover:border-slate-600 transition disabled:opacity-40 flex items-center space-x-1.5"
+                        onClick={() => handleRemove(serviceKey)}
+                        disabled={state.removing}
+                        title="Remove key"
+                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-medium transition border border-red-500/20"
                       >
-                        {state.testing ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                            <span>Testing...</span>
-                          </>
+                        {state.removing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
-                          <span>Test</span>
+                          <Trash2 className="w-3.5 h-3.5" />
                         )}
                       </button>
-
-                      {item.connected && (
-                        <button
-                          onClick={() => handleRemove(serviceKey)}
-                          disabled={state.removing}
-                          className="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-red-500/10 text-slate-400 hover:text-red-400 text-xs font-semibold border border-slate-800 hover:border-red-500/30 transition disabled:opacity-40"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-
-                  {/* Test or Save Result Message */}
-                  {state.message && (
-                    <div
-                      className={`text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2 ${
-                        state.success
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}
-                    >
-                      {state.success ? (
-                        <Check className="w-3.5 h-3.5 shrink-0" />
-                      ) : (
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      )}
-                      <span>{state.message}</span>
-                    </div>
-                  )}
                 </div>
-              );
-            })
-          )}
+
+                {/* Status Message */}
+                {state.message && (
+                  <div
+                    className={`text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 ${
+                      state.success
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    }`}
+                  >
+                    <span>{state.message}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
