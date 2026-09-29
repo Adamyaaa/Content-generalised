@@ -1,5 +1,5 @@
 services:
-  # 1. Backend Web Service (FastAPI + Docker + FFmpeg)
+  # Backend Web Service (FastAPI + Docker + FFmpeg)
   - type: web
     name: content-generalised-backend
     runtime: docker
@@ -16,21 +16,3 @@ services:
         value: https://co.wuk.sh
       - key: PORT
         value: 8000
-
-  # 2. Frontend Static Site (Vite + React)
-  - type: web
-    name: content-generalised-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: content-generalised-backend
-          property: host
