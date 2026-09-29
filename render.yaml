@@ -1,9 +1,10 @@
 services:
+  # 1. Backend Web Service (FastAPI + Docker + FFmpeg)
   - type: web
     name: content-generalised-backend
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
     region: oregon
     envVars:
@@ -13,7 +14,31 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: COBALT_API_URL
+        value: https://co.wuk.sh
       - key: CORS_ORIGINS
         value: '["*"]'
       - key: PORT
         value: 8000
+
+  # 2. Frontend Static Site (Vite + React)
+  - type: web
+    name: content-generalised-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    plan: free
+    region: oregon
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: content-generalised-backend
+          property: host
