@@ -24,11 +24,12 @@ services:
         value: 8000
 
   # 2. Frontend Static Site (Vite + React)
-  - type: static
+  - type: web
     name: content-generalised-frontend
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
-    publishDir: dist
+    staticPublishPath: dist
     routes:
       - type: rewrite
         source: /*
