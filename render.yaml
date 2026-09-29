@@ -10,16 +10,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: RAPIDAPI_KEY
-        sync: false
-      - key: COBALT_API_URL
-        value: https://co.wuk.sh
       - key: CORS_ORIGINS
         value: '["*"]'
+      - key: COBALT_API_URL
+        value: https://co.wuk.sh
       - key: PORT
         value: 8000
 
