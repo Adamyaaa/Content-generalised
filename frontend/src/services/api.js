@@ -1,8 +1,12 @@
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL 
-  ? import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '') 
+const rawBase = import.meta.env.VITE_API_BASE_URL 
+  ? import.meta.env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') 
   : '';
+
+const BACKEND_URL = rawBase && !rawBase.startsWith('http://') && !rawBase.startsWith('https://')
+  ? `https://${rawBase}`
+  : rawBase;
 
 const API_BASE = `${BACKEND_URL}/api/v1`;
 
